@@ -1,0 +1,61 @@
+[project]
+name = "soundpack-manager"
+version = "0.1.0"
+description = "CLI tool for cataloging, tagging, and organizing audio samples for Polyend Play Plus"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Eric Brookfield"}
+]
+keywords = ["audio", "samples", "polyend", "music", "cli", "tagging"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "anthropic>=0.18",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "numpy>=1.24",
+    "rich>=13.0",
+    "toml>=0.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "ruff",
+]
+audio = [
+    "sounddevice>=0.4",
+]
+
+[project.scripts]
+soundpack = "soundpack.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
