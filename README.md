@@ -101,6 +101,44 @@ Samples are allocated with weighted priority:
 2. **Medium**: Synth, Vocal, Bass
 3. **Lowest**: FX, Perc
 
+## Example Output
+
+```bash
+$ soundpack generate "experimental hip-hop with vaporwave sunglasses" --name FlavaWave
+Using AI to interpret prompt...
+Parsed tags: experimental, hiphop, lo-fi, vintage, retro, warm, saturated, analog,
+             mellow, soft, 808, break, vocal, texture, pad, ambient
+BPM range: 70-95
+
+Selected 64 samples (11.9 MB)
+                                    Pack Contents
+┏━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Folder ┃ Filename              ┃ Size ┃ Tags                                      ┃
+┡━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Kick   │ Open_Machine_Lazy.wav │ 172K │ lo-fi, loose, dark, kick, trap            │
+│ Kick   │ kick_round.wav        │  65K │ trap, hiphop, mellow, kick, short         │
+│ Kick   │ kick_mild.wav         │  62K │ trap, hiphop, mellow, kick, short         │
+│ Snare  │ snare_classic.wav     │  66K │ breaks, vintage, hiphop, retro, snare     │
+│ Snare  │ snare.wav             │  61K │ trap, hiphop, snare, short, dark          │
+│ ...    │                       │      │                                           │
+└────────┴───────────────────────┴──────┴───────────────────────────────────────────┘
+... and 59 more
+
+Pack exported to ~/Music/Polyend/Packs/FlavaWave
+```
+
+```bash
+$ soundpack generate "power yoga vibes" --name PowerYogaVibes
+Using AI to interpret prompt...
+Parsed tags: energetic, uplifting, electronic, modern, bright, punchy, clean,
+             bass, pad, percussion, sustained, warm, wide
+BPM range: 110-130
+
+Selected 64 samples (16.0 MB)
+```
+
+The AI interprets creative prompts like "vaporwave sunglasses" or "power yoga vibes" into concrete audio tags, then selects matching samples from your library.
+
 ## Polyend Play+ Constraints
 
 The tool respects Play+ hardware limits:
