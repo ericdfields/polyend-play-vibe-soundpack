@@ -34,6 +34,7 @@ class Database:
                 sample_rate INTEGER,
                 channels INTEGER,
                 bit_depth INTEGER,
+                file_size_bytes INTEGER,
 
                 -- Analyzed features (from librosa)
                 bpm REAL,
@@ -122,6 +123,7 @@ class Database:
         sample_rate: int | None = None,
         channels: int | None = None,
         bit_depth: int | None = None,
+        file_size_bytes: int | None = None,
         bpm: float | None = None,
         bpm_confidence: float | None = None,
         detected_key: str | None = None,
@@ -138,6 +140,7 @@ class Database:
         Args:
             file_path: Absolute path to the audio file.
             filename: Base filename.
+            file_size_bytes: File size in bytes.
             Other args: Optional audio properties and analysis data.
 
         Returns:
@@ -150,10 +153,10 @@ class Database:
             """
             INSERT INTO samples (
                 file_path, filename, duration_ms, sample_rate, channels, bit_depth,
-                bpm, bpm_confidence, detected_key, key_confidence,
+                file_size_bytes, bpm, bpm_confidence, detected_key, key_confidence,
                 spectral_centroid, onset_strength, rms_energy,
                 is_loop, is_oneshot, source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 file_path,
@@ -162,6 +165,7 @@ class Database:
                 sample_rate,
                 channels,
                 bit_depth,
+                file_size_bytes,
                 bpm,
                 bpm_confidence,
                 detected_key,

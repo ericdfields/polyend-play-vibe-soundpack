@@ -404,6 +404,7 @@ def select_samples_for_pack(
     tag_mapping: dict[int, list[str]],
     prompt: ParsedPrompt,
     max_samples: int = 64,
+    max_size_bytes: int | None = None,
 ) -> list[dict[str, Any]]:
     """Select samples for a pack based on prompt.
 
@@ -415,6 +416,7 @@ def select_samples_for_pack(
         tag_mapping: Dict mapping sample ID to list of tag names.
         prompt: Parsed prompt criteria.
         max_samples: Maximum samples to select.
+        max_size_bytes: Maximum total size in bytes (Play+ limit is ~32MB).
 
     Returns:
         List of selected samples, sorted by relevance.
@@ -440,6 +442,28 @@ def select_samples_for_pack(
     # Phase 1: Fill percussion folders to minimum (5 each)
     selected: list[dict[str, Any]] = []
     used_ids: set[int] = set()
+    total_size = 0
+
+    def can_add_sample(sample: dict[str, Any]) -> bool:
+        """Check if sample can be added within size limit."""
+        if max_size_bytes is None:
+            return True
+        sample_size = sample.get("file_size_bytes") or 0
+        return total_size + sample_size <= max_size_bytes
+
+    def add_sample(sample: dict[str, Any]) -> bool:
+        """Add sample if within limits. Returns True if added."""
+        nonlocal total_size
+        if len(selected) >= max_samples:
+            return False
+        if not can_add_sample(sample):
+            return False
+        if sample["id"] in used_ids:
+            return False
+        selected.append(sample)
+        used_ids.add(sample["id"])
+        total_size += sample.get("file_size_bytes") or 0
+        return True
 
     for folder in PERCUSSION_FOLDERS:
         if folder in scored_by_folder:
@@ -449,9 +473,7 @@ def select_samples_for_pack(
                     break
                 if len(selected) >= max_samples:
                     break
-                if sample["id"] not in used_ids:
-                    selected.append(sample)
-                    used_ids.add(sample["id"])
+                if add_sample(sample):
                     count += 1
 
     # Phase 2: Fill remaining slots with highest scoring samples
@@ -466,12 +488,13 @@ def select_samples_for_pack(
         # Sort by score descending
         remaining.sort(key=lambda x: x[0], reverse=True)
 
-        # Fill up to max_samples
+        # Fill up to max_samples or max_size
         for score, sample in remaining:
             if len(selected) >= max_samples:
                 break
-            selected.append(sample)
-            used_ids.add(sample["id"])
+            if max_size_bytes and total_size >= max_size_bytes:
+                break
+            add_sample(sample)
 
     return selected
 

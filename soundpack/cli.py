@@ -153,6 +153,7 @@ def import_samples(
                 sample_rate=info.get("sample_rate"),
                 channels=info.get("channels"),
                 bit_depth=info.get("bit_depth"),
+                file_size_bytes=file_size,
                 bpm=info.get("bpm"),
                 bpm_confidence=info.get("bpm_confidence"),
                 detected_key=info.get("detected_key"),
@@ -308,6 +309,42 @@ def analyze_samples(ctx, all_samples: bool, missing: bool, sample_ids: tuple):
             console.print(f"  [red]Error analyzing {sample['filename']}: {e}[/red]")
 
     console.print("[bold green]Analysis complete[/bold green]")
+
+
+# Refresh command - update file sizes and other metadata from disk
+@cli.command("refresh")
+@click.option("--all", "all_samples", is_flag=True, help="Refresh all samples")
+@click.option("--missing-sizes", is_flag=True, help="Only refresh samples without file_size_bytes")
+@pass_context
+def refresh_samples(ctx, all_samples: bool, missing_sizes: bool):
+    """Refresh sample metadata from disk (file sizes, check existence)."""
+    if all_samples:
+        samples = ctx.db.list_samples()
+    elif missing_sizes:
+        samples = ctx.db.list_samples()
+        samples = [s for s in samples if s.get("file_size_bytes") is None]
+    else:
+        console.print("[yellow]Specify --all or --missing-sizes[/yellow]")
+        return
+
+    console.print(f"Refreshing {len(samples)} samples...")
+
+    updated = 0
+    missing = 0
+    for sample in samples:
+        file_path = Path(sample["file_path"])
+        if not file_path.exists():
+            console.print(f"  [red]Missing: {sample['filename']}[/red]")
+            missing += 1
+            continue
+
+        file_size = file_path.stat().st_size
+        ctx.db.update_sample(sample["id"], file_size_bytes=file_size)
+        updated += 1
+
+    console.print(f"[bold green]Refreshed {updated} samples[/bold green]")
+    if missing:
+        console.print(f"[yellow]{missing} files not found on disk[/yellow]")
 
 
 # Tag command
@@ -548,6 +585,7 @@ def search_samples(ctx, query: str | None, tags: tuple, bpm: str | None, key: st
 @click.argument("prompt")
 @click.option("--name", "-n", help="Pack name (auto-generated if omitted)")
 @click.option("--max", "max_samples", type=int, default=64, help="Maximum samples")
+@click.option("--max-size", "max_size_mb", type=float, default=32.0, help="Maximum pack size in MB (default: 32)")
 @click.option("--output", "-o", type=click.Path(path_type=Path), help="Output directory")
 @click.option("--dry-run", is_flag=True, help="Show what would be included without exporting")
 @pass_context
@@ -556,6 +594,7 @@ def generate_pack(
     prompt: str,
     name: str | None,
     max_samples: int,
+    max_size_mb: float,
     output: Path | None,
     dry_run: bool,
 ):
@@ -581,25 +620,37 @@ def generate_pack(
         sample_tags = ctx.db.get_sample_tags(sample["id"])
         tag_mapping[sample["id"]] = [t["name"] for t in sample_tags]
 
-    # Select samples
-    selected = select_samples_for_pack(samples, tag_mapping, parsed, max_samples=max_samples)
+    # Select samples with size limit
+    max_size_bytes = int(max_size_mb * 1024 * 1024)
+    selected = select_samples_for_pack(
+        samples, tag_mapping, parsed,
+        max_samples=max_samples,
+        max_size_bytes=max_size_bytes,
+    )
 
     if not selected:
         console.print("[yellow]No samples match your criteria[/yellow]")
         return
 
-    console.print(f"\n[bold]Selected {len(selected)} samples[/bold]")
+    # Calculate total size
+    total_size_bytes = sum(s.get("file_size_bytes") or 0 for s in selected)
+    total_size_mb = total_size_bytes / (1024 * 1024)
+
+    console.print(f"\n[bold]Selected {len(selected)} samples ({total_size_mb:.1f} MB)[/bold]")
 
     # Show selected samples
     table = Table(title="Pack Contents")
     table.add_column("Folder", style="cyan")
     table.add_column("Filename")
+    table.add_column("Size", justify="right")
     table.add_column("Tags")
 
     for sample in selected[:20]:
         sample_tags = tag_mapping.get(sample["id"], [])
         folder = get_folder_for_tags(sample_tags)
-        table.add_row(folder, sample["filename"], ", ".join(sample_tags[:5]))
+        size_kb = (sample.get("file_size_bytes") or 0) / 1024
+        size_str = f"{size_kb:.0f}K" if size_kb < 1024 else f"{size_kb/1024:.1f}M"
+        table.add_row(folder, sample["filename"], size_str, ", ".join(sample_tags[:5]))
 
     console.print(table)
     if len(selected) > 20:

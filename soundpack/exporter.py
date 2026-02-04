@@ -12,6 +12,7 @@ FILENAME_MAX_LENGTH = 16
 MAX_SAMPLES_PER_PACK = 255
 SUPPORTED_SAMPLE_RATE = 44100
 MIN_SAMPLES_PER_PERC_FOLDER = 5  # Required for Beat Fill algorithm
+MAX_PACK_SIZE_MB = 32  # Sample pool memory limit
 
 # Instrument folders for organizing samples
 # NOTE: Percussion folders MUST contain "Kick", "Snare", or "HiHat" (case sensitive)
@@ -210,6 +211,7 @@ def export_pack(
     output_dir: str | Path,
     pack_name: str,
     max_samples: int = MAX_SAMPLES_PER_PACK,
+    max_size_mb: float = MAX_PACK_SIZE_MB,
     tag_mapping: dict[int, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Export samples as a Play Plus compatible pack.
@@ -219,6 +221,7 @@ def export_pack(
         output_dir: Directory to export to (will be created).
         pack_name: Name of the pack.
         max_samples: Maximum samples to include.
+        max_size_mb: Maximum total pack size in MB (Play+ limit is ~32MB).
         tag_mapping: Optional dict mapping sample_id to list of tag names.
                     If provided, samples are organized into instrument subfolders.
 
@@ -226,6 +229,8 @@ def export_pack(
         Dict with export results:
         - exported_count: Number of samples exported
         - skipped_count: Number of samples skipped
+        - skipped_size: Number skipped due to size limit
+        - total_size_mb: Total size of exported pack in MB
         - file_mapping: Dict mapping original filename to exported filename
         - errors: List of error messages
     """
@@ -234,6 +239,9 @@ def export_pack(
 
     exported_count = 0
     skipped_count = 0
+    skipped_size = 0
+    total_size_bytes = 0
+    max_size_bytes = int(max_size_mb * 1024 * 1024)
     file_mapping: dict[str, str] = {}
     errors: list[str] = []
 
@@ -252,6 +260,12 @@ def export_pack(
         if not source_path.exists():
             errors.append(f"File not found: {source_path}")
             skipped_count += 1
+            continue
+
+        # Check size limit
+        file_size = source_path.stat().st_size
+        if total_size_bytes + file_size > max_size_bytes:
+            skipped_size += 1
             continue
 
         # Determine destination folder
@@ -280,6 +294,7 @@ def export_pack(
             shutil.copy2(source_path, dest_path)
             file_mapping[original_name] = export_name
             exported_count += 1
+            total_size_bytes += file_size
         except Exception as e:
             errors.append(f"Error copying {original_name}: {e}")
             skipped_count += 1
@@ -301,9 +316,19 @@ def export_pack(
                     f"{folder} folder has {count} samples (need {MIN_SAMPLES_PER_PERC_FOLDER}+ for Beat Fill)"
                 )
 
+    # Add size limit warning if samples were skipped
+    if skipped_size > 0:
+        warnings.append(
+            f"{skipped_size} samples skipped (pack size limit {max_size_mb:.0f} MB reached)"
+        )
+
+    total_size_mb = total_size_bytes / (1024 * 1024)
+
     return {
         "exported_count": exported_count,
         "skipped_count": skipped_count,
+        "skipped_size": skipped_size,
+        "total_size_mb": total_size_mb,
         "file_mapping": file_mapping,
         "errors": errors,
         "warnings": warnings,
