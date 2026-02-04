@@ -27,17 +27,27 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
+Get from zero to a Play+ sound pack in 4 steps:
+
 ```bash
-# Import samples from a directory
+# 1. Set your Anthropic API key (for AI tagging)
+soundpack config set api.anthropic_api_key sk-ant-...
+
+# 2. Import your sample library
 soundpack import ~/Music/Samples --recursive --analyze
 
-# Auto-tag samples using AI (requires Anthropic API key)
-soundpack config set api.anthropic_api_key sk-ant-...
+# 3. Auto-tag everything with AI
 soundpack autotag --all --ai
 
-# Generate a pack from a natural language prompt
-soundpack generate "punchy techno kicks with dark 808 bass" --name TechnoDark
+# 4. Generate a pack!
+soundpack generate "lo-fi hiphop beats with dusty vinyl texture" --name LoFiBeats
+```
 
+Your pack is exported to `~/Music/Polyend/Packs/LoFiBeats/`, ready to copy to your Play+ SD card.
+
+### More Examples
+
+```bash
 # Preview without exporting
 soundpack generate "ambient pads and textures" --dry-run
 
