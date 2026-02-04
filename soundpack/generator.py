@@ -7,6 +7,7 @@ from typing import Any
 
 import anthropic
 
+from soundpack.tagger import DEFAULT_MODEL
 from soundpack.exporter import (
     get_folder_for_tags,
     PERCUSSION_FOLDERS,
@@ -525,7 +526,7 @@ Only include tags from the vocabulary. Be generous but relevant - the user wants
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=DEFAULT_MODEL,
             max_tokens=500,
             messages=[{"role": "user", "content": ai_prompt}],
         )

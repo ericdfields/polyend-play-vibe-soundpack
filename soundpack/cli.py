@@ -736,10 +736,22 @@ def autotag_samples(
 
     console.print(f"Auto-tagging {len(samples)} samples...")
 
+    # Pattern cache for AI results - samples with similar names share tags
+    # e.g., kick_01.wav through kick_50.wav will only need one API call
+    pattern_cache: dict[str, list[str]] = {} if ai else None
+    cache_hits = 0
+
     for sample in samples:
         try:
-            # Get suggested tags
-            tags = suggest_tags(sample, api_key=api_key, use_ai=ai)
+            # Get suggested tags (with caching for AI)
+            tags = suggest_tags(sample, api_key=api_key, use_ai=ai, pattern_cache=pattern_cache)
+
+            # Track cache usage
+            if pattern_cache is not None:
+                from soundpack.tagger import get_filename_pattern
+                pattern = get_filename_pattern(sample.get("filename", ""))
+                if pattern in pattern_cache and len(pattern_cache) > 0:
+                    cache_hits += 1
 
             if not tags:
                 continue
@@ -771,6 +783,11 @@ def autotag_samples(
 
         except Exception as e:
             console.print(f"  [red]Error tagging {sample['filename']}: {e}[/red]")
+
+    # Show cache stats
+    if pattern_cache is not None and cache_hits > 0:
+        api_calls = len(samples) - cache_hits
+        console.print(f"[dim]Pattern cache: {cache_hits} samples used cached tags, {api_calls} API calls made[/dim]")
 
     console.print("[bold green]Auto-tagging complete[/bold green]")
 

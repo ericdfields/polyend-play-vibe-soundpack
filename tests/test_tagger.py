@@ -9,6 +9,7 @@ from soundpack.tagger import (
     build_tagging_prompt,
     parse_ai_response,
     suggest_tags,
+    get_filename_pattern,
     TAG_VOCABULARY,
 )
 
@@ -46,6 +47,31 @@ class TestExtractTagsFromFilename:
         assert "01" not in tags
         assert "v2" not in tags
         assert "kick" in tags
+
+
+class TestFilenamePattern:
+    """Tests for filename pattern extraction (for caching)."""
+
+    def test_extracts_pattern_with_trailing_number(self):
+        """Removes trailing numbers from pattern."""
+        assert get_filename_pattern("kick_01.wav") == "kick"
+        assert get_filename_pattern("kick-15.wav") == "kick"
+        assert get_filename_pattern("snare_punchy_03.wav") == "snare_punchy"
+
+    def test_extracts_pattern_with_leading_number(self):
+        """Removes leading numbers from pattern."""
+        assert get_filename_pattern("01_kick.wav") == "kick"
+        assert get_filename_pattern("15-snare.wav") == "snare"
+
+    def test_handles_no_numbers(self):
+        """Returns name unchanged when no numbers."""
+        assert get_filename_pattern("kick_heavy.wav") == "kick_heavy"
+
+    def test_handles_complex_names(self):
+        """Handles various naming conventions."""
+        # Note: leading numbers like "808" are stripped (they're handled separately by tag extraction)
+        assert get_filename_pattern("808_kick_dark_01.wav") == "kick_dark"
+        assert get_filename_pattern("Vocal_Chop_FX_22.wav") == "vocal_chop_fx"
 
 
 class TestBuildTaggingPrompt:

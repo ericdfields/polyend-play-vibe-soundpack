@@ -6,6 +6,9 @@ from typing import Any
 
 import anthropic
 
+# Use Haiku for cost-effective tagging (~10x cheaper than Sonnet)
+DEFAULT_MODEL = "claude-haiku-4-20250514"
+
 # Tag vocabulary by category
 TAG_VOCABULARY = {
     "instrument": {
@@ -241,10 +244,31 @@ def parse_ai_response(response: str) -> list[str]:
     return [tag.lower() for tag in tags if tag.lower() in ALL_VALID_TAGS]
 
 
+def get_filename_pattern(filename: str) -> str:
+    """Extract a pattern from filename by removing trailing numbers.
+
+    This groups files like kick_01.wav, kick_02.wav into pattern "kick".
+
+    Args:
+        filename: The filename to extract pattern from.
+
+    Returns:
+        Pattern string (filename with numbers and extension stripped).
+    """
+    # Remove extension
+    name = filename.rsplit(".", 1)[0].lower()
+    # Remove trailing numbers and separators (kick_01 -> kick, snare-15 -> snare)
+    pattern = re.sub(r"[-_\s]*\d+$", "", name)
+    # Also handle patterns like "01_kick" -> "kick"
+    pattern = re.sub(r"^\d+[-_\s]*", "", pattern)
+    return pattern
+
+
 def suggest_tags(
     sample_info: dict[str, Any],
     api_key: str | None = None,
     use_ai: bool = True,
+    pattern_cache: dict[str, list[str]] | None = None,
 ) -> list[str]:
     """Suggest tags for a sample using filename analysis and optionally AI.
 
@@ -252,6 +276,8 @@ def suggest_tags(
         sample_info: Sample metadata dict.
         api_key: Anthropic API key (optional).
         use_ai: Whether to use AI for additional suggestions.
+        pattern_cache: Optional dict to cache AI results by filename pattern.
+            Pass a shared dict across calls to enable caching.
 
     Returns:
         List of suggested tag names.
@@ -265,12 +291,18 @@ def suggest_tags(
 
     # Use AI if requested and available
     if use_ai:
+        # Check pattern cache first
+        pattern = get_filename_pattern(filename)
+        if pattern_cache is not None and pattern in pattern_cache:
+            tags.update(pattern_cache[pattern])
+            return list(tags)
+
         client = get_anthropic_client(api_key)
         if client:
             try:
                 prompt = build_tagging_prompt(sample_info)
                 response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model=DEFAULT_MODEL,
                     max_tokens=500,
                     messages=[{"role": "user", "content": prompt}],
                 )
@@ -278,6 +310,10 @@ def suggest_tags(
                 if response.content and len(response.content) > 0:
                     ai_tags = parse_ai_response(response.content[0].text)
                     tags.update(ai_tags)
+
+                    # Cache the AI result for this pattern
+                    if pattern_cache is not None and pattern:
+                        pattern_cache[pattern] = ai_tags
             except Exception:
                 pass  # Fall back to filename-only tags
 
