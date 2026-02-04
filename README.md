@@ -41,6 +41,10 @@ soundpack generate "punchy techno kicks with dark 808 bass" --name TechnoDark
 # Preview without exporting
 soundpack generate "ambient pads and textures" --dry-run
 
+# Control Beat Fill depth (percussion variety)
+soundpack generate "trap drums" --beatfill deep  # more percussion variety
+soundpack generate "minimal techno" --beatfill minimal  # less percussion
+
 # View library statistics
 soundpack stats
 ```
@@ -60,10 +64,47 @@ soundpack stats
 | `export` | Export filtered samples as a pack |
 | `stats` | Show library statistics |
 | `config` | Manage configuration |
+| `refresh` | Update sample metadata (file sizes, etc.) |
+
+## Pack Generation Options
+
+```bash
+soundpack generate "dark techno" [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--name`, `-n` | Pack name (auto-generated if omitted) |
+| `--max` | Maximum samples (default: 64) |
+| `--max-size` | Maximum pack size in MB (default: 32) |
+| `--beatfill` | Beat Fill depth: `minimal`, `normal`, `deep`, `max` |
+| `--output`, `-o` | Output directory |
+| `--dry-run` | Preview without exporting |
+
+### Beat Fill Depth
+
+Controls how many samples per percussion folder (Kick, Snare, HiHat):
+
+| Preset | Samples/Folder | Best For |
+|--------|----------------|----------|
+| `minimal` | 5 | Small focused packs |
+| `normal` | 10 | Balanced variety (default for 64-sample packs) |
+| `deep` | 15 | Rich percussion selection |
+| `max` | 20 | Maximum variety drum kits |
+
+When not specified, depth auto-scales based on pack size.
+
+### Folder Priority
+
+Samples are allocated with weighted priority:
+1. **Highest**: Kick, Snare, HiHat (for Beat Fill)
+2. **Medium**: Synth, Vocal, Bass
+3. **Lowest**: FX, Perc
 
 ## Polyend Play+ Constraints
 
 The tool respects Play+ hardware limits:
+- **Sample pool memory**: 32 MB max per pack
 - **Filename display**: 16 characters max (excluding .wav)
 - **Samples per folder**: 255 max
 - **Audio format**: WAV (mono/stereo, 44.1kHz, 16/24-bit)
