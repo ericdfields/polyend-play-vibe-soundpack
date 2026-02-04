@@ -11,8 +11,10 @@ from soundpack.generator import (
     select_samples_for_pack,
     generate_pack_name,
     _expand_tags,
+    get_beatfill_minimum,
     TAG_EXPANSIONS,
     CREATIVE_ASSOCIATIONS,
+    BEATFILL_DEPTH,
 )
 
 
@@ -442,6 +444,170 @@ class TestPercussionPrioritization:
         assert folder_counts["Kick"] == 0
         assert folder_counts["Snare"] == 0
         assert folder_counts["HiHat"] == 0
+
+
+class TestWeightedFolderAllocation:
+    """Tests for weighted folder allocation in pack generation."""
+
+    @pytest.fixture
+    def diverse_library(self):
+        """Create library with samples in all folder types."""
+        samples = []
+        sample_id = 0
+        # 20 of each type for testing allocation
+        for _ in range(20):
+            samples.append({"id": sample_id, "filename": f"kick_{sample_id}.wav", "bpm": 120})
+            sample_id += 1
+        for _ in range(20):
+            samples.append({"id": sample_id, "filename": f"snare_{sample_id}.wav", "bpm": 120})
+            sample_id += 1
+        for _ in range(20):
+            samples.append({"id": sample_id, "filename": f"hihat_{sample_id}.wav", "bpm": 120})
+            sample_id += 1
+        for _ in range(20):
+            samples.append({"id": sample_id, "filename": f"synth_{sample_id}.wav", "bpm": 120})
+            sample_id += 1
+        for _ in range(20):
+            samples.append({"id": sample_id, "filename": f"vocal_{sample_id}.wav", "bpm": 120})
+            sample_id += 1
+        for _ in range(20):
+            samples.append({"id": sample_id, "filename": f"fx_{sample_id}.wav", "bpm": 120})
+            sample_id += 1
+        return samples
+
+    @pytest.fixture
+    def diverse_tag_mapping(self, diverse_library):
+        """Create tag mapping for diverse library."""
+        mapping = {}
+        for sample in diverse_library:
+            sid = sample["id"]
+            if sid < 20:
+                mapping[sid] = ["kick", "punchy"]
+            elif sid < 40:
+                mapping[sid] = ["snare", "crispy"]
+            elif sid < 60:
+                mapping[sid] = ["hihat", "closed"]
+            elif sid < 80:
+                mapping[sid] = ["synth", "pad"]
+            elif sid < 100:
+                mapping[sid] = ["vocal", "chant"]
+            else:
+                mapping[sid] = ["fx", "riser"]
+        return mapping
+
+    def test_weighted_allocation_prioritizes_percussion(self, diverse_library, diverse_tag_mapping):
+        """Kick, Snare, HiHat get more samples than FX due to higher weight."""
+        from soundpack.exporter import get_folder_for_tags
+
+        # Request all types
+        prompt = ParsedPrompt(tags=["kick", "snare", "hihat", "synth", "vocal", "fx"])
+
+        selected = select_samples_for_pack(
+            diverse_library, diverse_tag_mapping, prompt, max_samples=50
+        )
+
+        folder_counts = {"Kick": 0, "Snare": 0, "HiHat": 0, "Synth": 0, "Vocal": 0, "FX": 0}
+        for sample in selected:
+            tags = diverse_tag_mapping.get(sample["id"], [])
+            folder = get_folder_for_tags(tags)
+            if folder in folder_counts:
+                folder_counts[folder] += 1
+
+        # Percussion folders should have more samples than FX
+        assert folder_counts["Kick"] > folder_counts["FX"]
+        assert folder_counts["Snare"] > folder_counts["FX"]
+        assert folder_counts["HiHat"] > folder_counts["FX"]
+
+    def test_weighted_allocation_medium_priority_folders(self, diverse_library, diverse_tag_mapping):
+        """Synth and Vocal get more samples than FX but fewer than percussion."""
+        from soundpack.exporter import get_folder_for_tags
+
+        prompt = ParsedPrompt(tags=["kick", "snare", "hihat", "synth", "vocal", "fx"])
+
+        selected = select_samples_for_pack(
+            diverse_library, diverse_tag_mapping, prompt, max_samples=50
+        )
+
+        folder_counts = {"Kick": 0, "Snare": 0, "HiHat": 0, "Synth": 0, "Vocal": 0, "FX": 0}
+        for sample in selected:
+            tags = diverse_tag_mapping.get(sample["id"], [])
+            folder = get_folder_for_tags(tags)
+            if folder in folder_counts:
+                folder_counts[folder] += 1
+
+        # Medium priority (Synth, Vocal) should have more than FX
+        assert folder_counts["Synth"] >= folder_counts["FX"]
+        assert folder_counts["Vocal"] >= folder_counts["FX"]
+
+    def test_fx_gets_lowest_allocation(self, diverse_library, diverse_tag_mapping):
+        """FX folder receives the fewest samples due to lowest weight."""
+        from soundpack.exporter import get_folder_for_tags
+
+        prompt = ParsedPrompt(tags=["kick", "snare", "hihat", "synth", "vocal", "fx"])
+
+        selected = select_samples_for_pack(
+            diverse_library, diverse_tag_mapping, prompt, max_samples=50
+        )
+
+        folder_counts = {"Kick": 0, "Snare": 0, "HiHat": 0, "Synth": 0, "Vocal": 0, "FX": 0}
+        for sample in selected:
+            tags = diverse_tag_mapping.get(sample["id"], [])
+            folder = get_folder_for_tags(tags)
+            if folder in folder_counts:
+                folder_counts[folder] += 1
+
+        # FX should be the lowest (or tied for lowest)
+        fx_count = folder_counts["FX"]
+        assert fx_count <= folder_counts["Kick"]
+        assert fx_count <= folder_counts["Snare"]
+        assert fx_count <= folder_counts["HiHat"]
+
+
+class TestBeatFillDepth:
+    """Tests for Beat Fill depth scaling."""
+
+    def test_explicit_depth_minimal(self):
+        """Explicit 'minimal' depth returns 5."""
+        assert get_beatfill_minimum(100, "minimal") == 5
+
+    def test_explicit_depth_normal(self):
+        """Explicit 'normal' depth returns 10."""
+        assert get_beatfill_minimum(100, "normal") == 10
+
+    def test_explicit_depth_deep(self):
+        """Explicit 'deep' depth returns 15."""
+        assert get_beatfill_minimum(100, "deep") == 15
+
+    def test_explicit_depth_max(self):
+        """Explicit 'max' depth returns 20."""
+        assert get_beatfill_minimum(100, "max") == 20
+
+    def test_auto_scale_small_pack(self):
+        """Small packs (<=32) get minimal depth."""
+        assert get_beatfill_minimum(32) == BEATFILL_DEPTH["minimal"]
+        assert get_beatfill_minimum(20) == BEATFILL_DEPTH["minimal"]
+
+    def test_auto_scale_medium_pack(self):
+        """Medium packs (33-64) get normal depth."""
+        assert get_beatfill_minimum(64) == BEATFILL_DEPTH["normal"]
+        assert get_beatfill_minimum(50) == BEATFILL_DEPTH["normal"]
+
+    def test_auto_scale_large_pack(self):
+        """Large packs (65-128) get deep depth."""
+        assert get_beatfill_minimum(128) == BEATFILL_DEPTH["deep"]
+        assert get_beatfill_minimum(100) == BEATFILL_DEPTH["deep"]
+
+    def test_auto_scale_very_large_pack(self):
+        """Very large packs (>128) get max depth."""
+        assert get_beatfill_minimum(200) == BEATFILL_DEPTH["max"]
+        assert get_beatfill_minimum(255) == BEATFILL_DEPTH["max"]
+
+    def test_explicit_depth_overrides_auto(self):
+        """Explicit depth always overrides auto-scaling."""
+        # Small pack but explicit deep
+        assert get_beatfill_minimum(20, "deep") == 15
+        # Large pack but explicit minimal
+        assert get_beatfill_minimum(200, "minimal") == 5
 
 
 class TestGeneratePackName:

@@ -11,8 +11,65 @@ from soundpack.tagger import DEFAULT_MODEL
 from soundpack.exporter import (
     get_folder_for_tags,
     PERCUSSION_FOLDERS,
+    INSTRUMENT_FOLDERS,
     MIN_SAMPLES_PER_PERC_FOLDER,
 )
+
+# Folder allocation weights for pack generation
+# Higher weight = more samples allocated to that folder
+# Kick, Snare, HiHat are highest priority for Beat Fill
+# Synth, Vocal, Bass are medium priority
+# FX, Perc fill remaining space with lowest priority
+FOLDER_WEIGHTS = {
+    "Kick": 5,
+    "Snare": 5,
+    "HiHat": 5,
+    "Synth": 3,
+    "Vocal": 3,
+    "Bass": 3,
+    "Perc": 2,
+    "FX": 1,
+}
+
+# Beat Fill depth presets - minimum samples per percussion folder
+# More samples = more variety for the Beat Fill algorithm
+BEATFILL_DEPTH = {
+    "minimal": 5,   # Bare minimum for Beat Fill to work
+    "normal": 10,   # Good variety without dominating the pack
+    "deep": 15,     # Rich percussion selection
+    "max": 20,      # Maximum percussion variety
+}
+
+
+def get_beatfill_minimum(max_samples: int, depth: str | None = None) -> int:
+    """Calculate minimum samples per percussion folder.
+
+    If depth is specified, use that preset.
+    Otherwise, scale based on pack size:
+    - Small packs (<=32): minimal (5)
+    - Medium packs (33-64): normal (10)
+    - Large packs (65-128): deep (15)
+    - Very large packs (>128): max (20)
+
+    Args:
+        max_samples: Maximum samples in the pack.
+        depth: Optional depth preset ("minimal", "normal", "deep", "max").
+
+    Returns:
+        Minimum samples per percussion folder.
+    """
+    if depth and depth in BEATFILL_DEPTH:
+        return BEATFILL_DEPTH[depth]
+
+    # Scale with pack size
+    if max_samples <= 32:
+        return BEATFILL_DEPTH["minimal"]
+    elif max_samples <= 64:
+        return BEATFILL_DEPTH["normal"]
+    elif max_samples <= 128:
+        return BEATFILL_DEPTH["deep"]
+    else:
+        return BEATFILL_DEPTH["max"]
 
 
 # Tag vocabulary for prompt parsing
@@ -405,11 +462,12 @@ def select_samples_for_pack(
     prompt: ParsedPrompt,
     max_samples: int = 64,
     max_size_bytes: int | None = None,
+    beatfill_depth: str | None = None,
 ) -> list[dict[str, Any]]:
     """Select samples for a pack based on prompt.
 
-    Prioritizes percussion folders (Kick, Snare, HiHat) to ensure at least
-    MIN_SAMPLES_PER_PERC_FOLDER samples each for the Play+ Beat Fill algorithm.
+    Prioritizes percussion folders (Kick, Snare, HiHat) to ensure sufficient
+    samples for the Play+ Beat Fill algorithm.
 
     Args:
         samples: List of sample dicts from database.
@@ -417,6 +475,8 @@ def select_samples_for_pack(
         prompt: Parsed prompt criteria.
         max_samples: Maximum samples to select.
         max_size_bytes: Maximum total size in bytes (Play+ limit is ~32MB).
+        beatfill_depth: Optional depth preset ("minimal", "normal", "deep", "max").
+            If None, scales automatically with pack size.
 
     Returns:
         List of selected samples, sorted by relevance.
@@ -439,7 +499,10 @@ def select_samples_for_pack(
     for folder in scored_by_folder:
         scored_by_folder[folder].sort(key=lambda x: x[0], reverse=True)
 
-    # Phase 1: Fill percussion folders to minimum (5 each)
+    # Calculate dynamic Beat Fill minimum based on pack size or explicit depth
+    perc_minimum = get_beatfill_minimum(max_samples, beatfill_depth)
+
+    # Phase 1: Fill percussion folders to minimum for Beat Fill
     selected: list[dict[str, Any]] = []
     used_ids: set[int] = set()
     total_size = 0
@@ -469,32 +532,87 @@ def select_samples_for_pack(
         if folder in scored_by_folder:
             count = 0
             for score, sample in scored_by_folder[folder]:
-                if count >= MIN_SAMPLES_PER_PERC_FOLDER:
+                if count >= perc_minimum:
                     break
                 if len(selected) >= max_samples:
                     break
                 if add_sample(sample):
                     count += 1
 
-    # Phase 2: Fill remaining slots with highest scoring samples
+    # Phase 2: Weighted allocation for remaining slots
+    # Allocate proportionally based on folder weights
     if len(selected) < max_samples:
-        # Collect all remaining samples
-        remaining: list[tuple[float, dict[str, Any]]] = []
-        for folder, samples_list in scored_by_folder.items():
-            for score, sample in samples_list:
-                if sample["id"] not in used_ids:
-                    remaining.append((score, sample))
+        remaining_slots = max_samples - len(selected)
 
-        # Sort by score descending
-        remaining.sort(key=lambda x: x[0], reverse=True)
+        # Calculate quota per folder based on weights
+        # Only include folders that have remaining samples
+        available_folders = []
+        for folder in INSTRUMENT_FOLDERS:
+            if folder in scored_by_folder:
+                remaining_count = sum(
+                    1 for _, s in scored_by_folder[folder] if s["id"] not in used_ids
+                )
+                if remaining_count > 0:
+                    available_folders.append(folder)
 
-        # Fill up to max_samples or max_size
-        for score, sample in remaining:
-            if len(selected) >= max_samples:
-                break
-            if max_size_bytes and total_size >= max_size_bytes:
-                break
-            add_sample(sample)
+        if available_folders:
+            # Calculate total weight of available folders
+            total_weight = sum(FOLDER_WEIGHTS.get(f, 1) for f in available_folders)
+
+            # Calculate quotas (at least 1 slot per folder if available)
+            folder_quotas: dict[str, int] = {}
+            allocated = 0
+            for folder in available_folders:
+                weight = FOLDER_WEIGHTS.get(folder, 1)
+                quota = max(1, int(remaining_slots * weight / total_weight))
+                folder_quotas[folder] = quota
+                allocated += quota
+
+            # Distribute any remaining slots to highest-priority folders
+            while allocated < remaining_slots:
+                for folder in sorted(
+                    available_folders, key=lambda f: FOLDER_WEIGHTS.get(f, 1), reverse=True
+                ):
+                    if allocated >= remaining_slots:
+                        break
+                    folder_quotas[folder] += 1
+                    allocated += 1
+
+            # Fill each folder up to its quota
+            for folder in sorted(
+                available_folders, key=lambda f: FOLDER_WEIGHTS.get(f, 1), reverse=True
+            ):
+                quota = folder_quotas.get(folder, 0)
+                added_count = 0
+
+                for score, sample in scored_by_folder[folder]:
+                    if added_count >= quota:
+                        break
+                    if len(selected) >= max_samples:
+                        break
+                    if max_size_bytes and total_size >= max_size_bytes:
+                        break
+                    if add_sample(sample):
+                        added_count += 1
+
+        # Phase 3: Fill any remaining slots with highest scoring samples overall
+        # (handles case where some folders couldn't fill their quotas)
+        if len(selected) < max_samples:
+            remaining: list[tuple[float, dict[str, Any]]] = []
+            for folder, samples_list in scored_by_folder.items():
+                for score, sample in samples_list:
+                    if sample["id"] not in used_ids:
+                        remaining.append((score, sample))
+
+            # Sort by score descending
+            remaining.sort(key=lambda x: x[0], reverse=True)
+
+            for score, sample in remaining:
+                if len(selected) >= max_samples:
+                    break
+                if max_size_bytes and total_size >= max_size_bytes:
+                    break
+                add_sample(sample)
 
     return selected
 

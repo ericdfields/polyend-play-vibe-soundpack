@@ -586,6 +586,12 @@ def search_samples(ctx, query: str | None, tags: tuple, bpm: str | None, key: st
 @click.option("--name", "-n", help="Pack name (auto-generated if omitted)")
 @click.option("--max", "max_samples", type=int, default=64, help="Maximum samples")
 @click.option("--max-size", "max_size_mb", type=float, default=32.0, help="Maximum pack size in MB (default: 32)")
+@click.option(
+    "--beatfill", "beatfill_depth",
+    type=click.Choice(["minimal", "normal", "deep", "max"]),
+    default=None,
+    help="Beat Fill percussion depth (default: auto-scales with pack size)"
+)
 @click.option("--output", "-o", type=click.Path(path_type=Path), help="Output directory")
 @click.option("--dry-run", is_flag=True, help="Show what would be included without exporting")
 @pass_context
@@ -595,6 +601,7 @@ def generate_pack(
     name: str | None,
     max_samples: int,
     max_size_mb: float,
+    beatfill_depth: str | None,
     output: Path | None,
     dry_run: bool,
 ):
@@ -626,6 +633,7 @@ def generate_pack(
         samples, tag_mapping, parsed,
         max_samples=max_samples,
         max_size_bytes=max_size_bytes,
+        beatfill_depth=beatfill_depth,
     )
 
     if not selected:

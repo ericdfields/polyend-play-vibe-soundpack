@@ -109,6 +109,19 @@ class Database:
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.commit()
 
+        # Run migrations for existing databases
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        """Run schema migrations for existing databases."""
+        # Migration: Add file_size_bytes column if it doesn't exist
+        cursor = self.conn.execute("PRAGMA table_info(samples)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if "file_size_bytes" not in columns:
+            self.conn.execute("ALTER TABLE samples ADD COLUMN file_size_bytes INTEGER")
+            self.conn.commit()
+
     def close(self) -> None:
         """Close database connection."""
         self.conn.close()
