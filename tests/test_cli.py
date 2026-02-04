@@ -8,7 +8,35 @@ import pytest
 import soundfile as sf
 from click.testing import CliRunner
 
-from soundpack.cli import cli
+from soundpack.cli import cli, parse_id_ranges
+
+
+class TestParseIdRanges:
+    """Tests for ID range parsing."""
+
+    def test_single_ids(self):
+        """Parses single IDs."""
+        assert parse_id_ranges(("1", "2", "3")) == [1, 2, 3]
+
+    def test_range(self):
+        """Parses ranges like 1-5."""
+        assert parse_id_ranges(("1-5",)) == [1, 2, 3, 4, 5]
+
+    def test_comma_separated(self):
+        """Parses comma-separated values."""
+        assert parse_id_ranges(("1,5,10",)) == [1, 5, 10]
+
+    def test_mixed(self):
+        """Parses mixed ranges and single values."""
+        assert parse_id_ranges(("1-3,10,20-22",)) == [1, 2, 3, 10, 20, 21, 22]
+
+    def test_multiple_args(self):
+        """Handles multiple arguments."""
+        assert parse_id_ranges(("1-3", "10", "20-22")) == [1, 2, 3, 10, 20, 21, 22]
+
+    def test_ignores_invalid(self):
+        """Ignores invalid values."""
+        assert parse_id_ranges(("1", "abc", "3")) == [1, 3]
 
 
 @pytest.fixture

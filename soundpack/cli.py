@@ -694,22 +694,65 @@ def export_samples(
         console.print(f"  [yellow]⚠ {warning}[/yellow]")
 
 
+def parse_id_ranges(id_strings: tuple[str, ...]) -> list[int]:
+    """Parse ID arguments supporting ranges and comma-separated values.
+
+    Supports:
+    - Single IDs: 5
+    - Ranges: 1-100
+    - Comma-separated: 1,5,10
+    - Mixed: 1-10,15,20-25
+
+    Args:
+        id_strings: Tuple of ID strings from CLI.
+
+    Returns:
+        List of parsed integer IDs.
+    """
+    ids = []
+    for arg in id_strings:
+        # Split by comma first
+        for part in arg.split(","):
+            part = part.strip()
+            if "-" in part and not part.startswith("-"):
+                # It's a range like "1-100"
+                try:
+                    start, end = part.split("-", 1)
+                    ids.extend(range(int(start), int(end) + 1))
+                except ValueError:
+                    pass  # Skip invalid ranges
+            else:
+                # Single ID
+                try:
+                    ids.append(int(part))
+                except ValueError:
+                    pass  # Skip invalid IDs
+    return ids
+
+
 # Auto-tag command
 @cli.command("autotag")
 @click.option("--all", "all_samples", is_flag=True, help="Tag all samples")
 @click.option("--untagged", is_flag=True, help="Only tag samples without tags")
 @click.option("--ai", is_flag=True, help="Use AI for tagging (requires API key)")
 @click.option("--force", is_flag=True, help="Re-tag even if already AI-tagged")
-@click.argument("sample_ids", nargs=-1, type=int)
+@click.argument("sample_ids", nargs=-1, type=str)
 @pass_context
 def autotag_samples(
     ctx, all_samples: bool, untagged: bool, ai: bool, force: bool, sample_ids: tuple
 ):
-    """Automatically tag samples based on filename and optionally AI."""
+    """Automatically tag samples based on filename and optionally AI.
+
+    SAMPLE_IDS can be single IDs, ranges, or comma-separated:
+      soundpack autotag 1 2 3
+      soundpack autotag 1-100
+      soundpack autotag 1-50,75,100-150
+    """
     if all_samples:
         samples = ctx.db.list_samples()
     elif sample_ids:
-        samples = [ctx.db.get_sample(sid) for sid in sample_ids]
+        parsed_ids = parse_id_ranges(sample_ids)
+        samples = [ctx.db.get_sample(sid) for sid in parsed_ids]
         samples = [s for s in samples if s]
     else:
         console.print("[yellow]Specify --all or sample IDs to tag[/yellow]")
@@ -779,7 +822,7 @@ def autotag_samples(
                     source="ai" if ai else "filename",
                 )
 
-            console.print(f"  {sample['filename']}: {', '.join(tags)}")
+            console.print(f"  [dim]{sample['id']}[/dim] {sample['filename']}: {', '.join(tags)}")
 
         except Exception as e:
             console.print(f"  [red]Error tagging {sample['filename']}: {e}[/red]")
