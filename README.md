@@ -14,7 +14,7 @@ A CLI tool for cataloging, tagging, and organizing audio samples with AI-assiste
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/polyend-plus-manager.git
+git clone https://github.com/ericdfields/polyend-plus-manager.git
 cd polyend-plus-manager
 
 # Create virtual environment
