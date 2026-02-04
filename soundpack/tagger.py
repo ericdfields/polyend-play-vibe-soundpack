@@ -6,8 +6,8 @@ from typing import Any
 
 import anthropic
 
-# Use Haiku for cost-effective tagging (~10x cheaper than Sonnet)
-DEFAULT_MODEL = "claude-haiku-4-20250514"
+# Use Sonnet for high-quality tagging (Haiku was too shallow)
+DEFAULT_MODEL = "claude-sonnet-4-20250514"
 
 # Tag vocabulary by category
 TAG_VOCABULARY = {
