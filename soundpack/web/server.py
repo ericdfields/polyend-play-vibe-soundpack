@@ -230,6 +230,113 @@ async def get_stats() -> dict[str, Any]:
     }
 
 
+@app.post("/api/suggest")
+async def suggest_samples(
+    pack_ids: list[int],
+    categories: list[str] | None = None,
+    limit: int = Query(10, ge=1, le=50),
+) -> dict[str, Any]:
+    """Suggest samples that complement the current pack selection.
+
+    Args:
+        pack_ids: List of sample IDs currently in the pack.
+        categories: Optional list of categories to focus on (e.g., ["snare", "hihat"]).
+        limit: Maximum number of suggestions to return.
+
+    Returns:
+        Dict with suggestions and pack analysis.
+    """
+    from soundpack.map import suggest_complements, analyze_pack_balance
+
+    database = get_db()
+
+    # Load pack samples with their tags
+    pack_samples = []
+    for sample_id in pack_ids:
+        sample = database.get_sample(sample_id)
+        if sample:
+            tags = database.get_sample_tags(sample_id)
+            sample_dict = dict(sample)
+            sample_dict["tags"] = [t["name"] for t in tags]
+            pack_samples.append(sample_dict)
+
+    if not pack_samples:
+        return {
+            "suggestions": [],
+            "analysis": {"empty": True},
+            "message": "No valid samples in pack",
+        }
+
+    # Load all samples with tags
+    all_samples = database.get_samples_with_map_data()
+    for sample in all_samples:
+        tags = database.get_sample_tags(sample["id"])
+        sample["tags"] = [t["name"] for t in tags]
+
+    # Get suggestions
+    suggestions = suggest_complements(
+        pack_samples,
+        all_samples,
+        target_categories=categories,
+        limit=limit,
+    )
+
+    # Format suggestions for response
+    formatted_suggestions = []
+    for s in suggestions:
+        formatted_suggestions.append({
+            "id": s["id"],
+            "filename": s["filename"],
+            "x": s["map_x"],
+            "y": s["map_y"],
+            "tags": s.get("tags", []),
+            "bpm": s.get("bpm"),
+            "score": s["suggestion_score"],
+            "reason": s["suggestion_reason"],
+        })
+
+    # Analyze pack balance
+    analysis = analyze_pack_balance(pack_samples)
+
+    return {
+        "suggestions": formatted_suggestions,
+        "analysis": analysis,
+    }
+
+
+@app.post("/api/pack/analyze")
+async def analyze_pack(pack_ids: list[int]) -> dict[str, Any]:
+    """Analyze the balance and composition of a pack.
+
+    Args:
+        pack_ids: List of sample IDs in the pack.
+
+    Returns:
+        Dict with pack analysis including category distribution,
+        spectral balance, and suggestions.
+    """
+    from soundpack.map import analyze_pack_balance
+
+    database = get_db()
+
+    # Load pack samples with their tags
+    pack_samples = []
+    for sample_id in pack_ids:
+        sample = database.get_sample(sample_id)
+        if sample:
+            tags = database.get_sample_tags(sample_id)
+            sample_dict = dict(sample)
+            sample_dict["tags"] = [t["name"] for t in tags]
+            pack_samples.append(sample_dict)
+
+    if not pack_samples:
+        return {"empty": True, "message": "No valid samples in pack"}
+
+    analysis = analyze_pack_balance(pack_samples)
+
+    return analysis
+
+
 def create_app(db_path: Path | None = None, config_path: Path | None = None) -> FastAPI:
     """Create and configure the FastAPI app.
 

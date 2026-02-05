@@ -421,3 +421,374 @@ def export_map_data(
                     f'{sample.get("detected_key") or ""},{sample.get("duration_ms") or ""}'
                 )
         output_path.write_text("\n".join(lines))
+
+
+# === Pack Builder Suggestions ===
+
+# Instrument categories for pack building
+INSTRUMENT_CATEGORIES = {
+    "kick": ["kick", "808", "909"],
+    "snare": ["snare", "clap", "rim"],
+    "hihat": ["hihat", "hat", "cymbal", "ride"],
+    "perc": ["perc", "shaker", "tambourine", "conga", "bongo", "tom"],
+    "bass": ["bass", "sub", "808"],
+    "synth": ["synth", "pad", "lead", "keys", "piano", "organ"],
+    "fx": ["fx", "riser", "impact", "sweep", "noise", "texture"],
+    "vocal": ["vocal", "vox", "voice", "choir"],
+    "loop": ["loop", "break", "beat"],
+}
+
+# Which categories to suggest after each category (the pack building flow)
+CATEGORY_FLOW = {
+    "kick": ["snare", "hihat"],
+    "snare": ["hihat", "perc"],
+    "hihat": ["perc", "bass"],
+    "perc": ["bass", "synth"],
+    "bass": ["synth", "fx"],
+    "synth": ["fx", "vocal"],
+    "fx": ["vocal", "loop"],
+    "vocal": ["loop"],
+    "loop": [],
+}
+
+
+def get_sample_category(tags: list[str]) -> str | None:
+    """Determine the primary instrument category for a sample based on its tags.
+
+    Args:
+        tags: List of tag names.
+
+    Returns:
+        Category name or None if not categorizable.
+    """
+    tags_lower = [t.lower() for t in tags]
+
+    for category, category_tags in INSTRUMENT_CATEGORIES.items():
+        for tag in category_tags:
+            if tag in tags_lower:
+                return category
+
+    return None
+
+
+def get_pack_centroid(
+    pack_samples: list[dict[str, Any]],
+) -> tuple[float, float] | None:
+    """Calculate the centroid position of samples in a pack.
+
+    Args:
+        pack_samples: List of sample dicts with map_x, map_y.
+
+    Returns:
+        (x, y) centroid or None if no valid positions.
+    """
+    positions = [
+        (s["map_x"], s["map_y"])
+        for s in pack_samples
+        if s.get("map_x") is not None and s.get("map_y") is not None
+    ]
+
+    if not positions:
+        return None
+
+    x_mean = sum(p[0] for p in positions) / len(positions)
+    y_mean = sum(p[1] for p in positions) / len(positions)
+
+    return (x_mean, y_mean)
+
+
+def get_common_tags(pack_samples: list[dict[str, Any]], min_frequency: float = 0.3) -> list[str]:
+    """Find tags that appear frequently across pack samples.
+
+    Args:
+        pack_samples: List of sample dicts with tags.
+        min_frequency: Minimum fraction of samples that must have a tag.
+
+    Returns:
+        List of common tag names.
+    """
+    if not pack_samples:
+        return []
+
+    tag_counts: dict[str, int] = {}
+    for sample in pack_samples:
+        for tag in sample.get("tags", []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    threshold = len(pack_samples) * min_frequency
+    common = [tag for tag, count in tag_counts.items() if count >= threshold]
+
+    return common
+
+
+def get_pack_bpm_range(pack_samples: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """Get the BPM range of samples in a pack.
+
+    Args:
+        pack_samples: List of sample dicts with bpm.
+
+    Returns:
+        (min_bpm, max_bpm) or None if no BPM data.
+    """
+    bpms = [s["bpm"] for s in pack_samples if s.get("bpm")]
+    if not bpms:
+        return None
+    return (min(bpms), max(bpms))
+
+
+def suggest_complements(
+    pack_samples: list[dict[str, Any]],
+    all_samples: list[dict[str, Any]],
+    target_categories: list[str] | None = None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Suggest samples that complement the current pack.
+
+    Uses multiple signals to find samples that "work with" what's already selected:
+    - Tag coherence: shares genre/mood/character tags
+    - Spectral complement: different position (avoids frequency clash)
+    - BPM compatibility: similar tempo for loops
+    - Category targeting: focuses on needed instrument types
+
+    Args:
+        pack_samples: Samples already in the pack.
+        all_samples: All available samples to choose from.
+        target_categories: Specific categories to suggest (e.g., ["snare", "hihat"]).
+        limit: Maximum suggestions to return.
+
+    Returns:
+        List of sample dicts with added 'suggestion_score' and 'suggestion_reason'.
+    """
+    if not pack_samples:
+        return []
+
+    # Analyze the current pack
+    pack_centroid = get_pack_centroid(pack_samples)
+    pack_tags = get_common_tags(pack_samples)
+    pack_bpm = get_pack_bpm_range(pack_samples)
+    pack_ids = {s["id"] for s in pack_samples}
+
+    # Determine what categories we already have
+    pack_categories = set()
+    for sample in pack_samples:
+        cat = get_sample_category(sample.get("tags", []))
+        if cat:
+            pack_categories.add(cat)
+
+    # If no target categories specified, suggest next in flow
+    if not target_categories:
+        target_categories = []
+        for cat in pack_categories:
+            target_categories.extend(CATEGORY_FLOW.get(cat, []))
+        # Remove categories we already have plenty of
+        target_categories = [c for c in target_categories if c not in pack_categories]
+        # If still empty, suggest common percussion
+        if not target_categories:
+            target_categories = ["snare", "hihat", "perc"]
+
+    # Score all candidates
+    scored_samples = []
+
+    for sample in all_samples:
+        # Skip samples already in pack
+        if sample["id"] in pack_ids:
+            continue
+
+        # Skip samples without map positions
+        if sample.get("map_x") is None:
+            continue
+
+        sample_tags = sample.get("tags", [])
+        sample_category = get_sample_category(sample_tags)
+
+        # Skip if not in target categories
+        if target_categories and sample_category not in target_categories:
+            continue
+
+        score = 0.0
+        reasons = []
+
+        # 1. Tag coherence (same vibe) - up to 30 points
+        shared_tags = set(sample_tags) & set(pack_tags)
+        # Weight genre/mood/character tags higher than instrument tags
+        vibe_tags = [t for t in shared_tags if t not in sum(INSTRUMENT_CATEGORIES.values(), [])]
+        tag_score = len(vibe_tags) * 10 + len(shared_tags) * 2
+        tag_score = min(tag_score, 30)
+        if tag_score > 0:
+            score += tag_score
+            reasons.append(f"shares {', '.join(list(shared_tags)[:3])}")
+
+        # 2. Spectral complement - up to 25 points
+        # We want samples that are DIFFERENT enough to not clash,
+        # but not SO different they don't fit
+        if pack_centroid:
+            sample_pos = (sample["map_x"], sample["map_y"])
+            distance = np.sqrt(
+                (sample_pos[0] - pack_centroid[0]) ** 2 +
+                (sample_pos[1] - pack_centroid[1]) ** 2
+            )
+            # Sweet spot: 0.15 to 0.45 distance
+            if 0.15 <= distance <= 0.45:
+                complement_score = 25
+                reasons.append("good spectral balance")
+            elif 0.08 <= distance <= 0.6:
+                complement_score = 15
+            else:
+                complement_score = 5
+            score += complement_score
+
+        # 3. BPM compatibility - up to 20 points
+        if pack_bpm and sample.get("bpm"):
+            bpm_diff = min(
+                abs(sample["bpm"] - pack_bpm[0]),
+                abs(sample["bpm"] - pack_bpm[1])
+            )
+            if bpm_diff <= 2:
+                score += 20
+                reasons.append("BPM match")
+            elif bpm_diff <= 5:
+                score += 15
+            elif bpm_diff <= 10:
+                score += 10
+
+        # 4. Category bonus - up to 15 points
+        if sample_category in target_categories[:2]:
+            score += 15
+            reasons.append(f"fills {sample_category} slot")
+        elif sample_category in target_categories:
+            score += 10
+
+        # 5. Brightness/energy complement - up to 10 points
+        # If pack is dark (low y), prefer brighter complements for contrast
+        if pack_centroid:
+            pack_y = pack_centroid[1]
+            sample_y = sample["map_y"]
+            # Mild preference for samples on opposite brightness
+            if pack_y < 0.4 and sample_y > 0.5:
+                score += 10
+                reasons.append("adds brightness")
+            elif pack_y > 0.6 and sample_y < 0.5:
+                score += 10
+                reasons.append("adds depth")
+
+        if score > 0:
+            result = dict(sample)
+            result["suggestion_score"] = score
+            result["suggestion_reason"] = "; ".join(reasons) if reasons else "potential match"
+            scored_samples.append(result)
+
+    # Sort by score and return top suggestions
+    scored_samples.sort(key=lambda x: x["suggestion_score"], reverse=True)
+
+    return scored_samples[:limit]
+
+
+def get_next_categories(pack_samples: list[dict[str, Any]]) -> list[str]:
+    """Determine what instrument categories to suggest next.
+
+    Args:
+        pack_samples: Current pack samples.
+
+    Returns:
+        List of suggested category names.
+    """
+    if not pack_samples:
+        return ["kick", "snare", "hihat"]
+
+    # What do we have?
+    pack_categories = set()
+    for sample in pack_samples:
+        cat = get_sample_category(sample.get("tags", []))
+        if cat:
+            pack_categories.add(cat)
+
+    # What should come next?
+    next_cats = []
+    for cat in pack_categories:
+        for next_cat in CATEGORY_FLOW.get(cat, []):
+            if next_cat not in pack_categories and next_cat not in next_cats:
+                next_cats.append(next_cat)
+
+    # If nothing suggested, recommend basic percussion
+    if not next_cats:
+        for cat in ["kick", "snare", "hihat", "bass"]:
+            if cat not in pack_categories:
+                next_cats.append(cat)
+
+    return next_cats[:3]
+
+
+def analyze_pack_balance(
+    pack_samples: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Analyze the spectral and categorical balance of a pack.
+
+    Args:
+        pack_samples: Current pack samples.
+
+    Returns:
+        Dict with balance analysis.
+    """
+    if not pack_samples:
+        return {"empty": True}
+
+    # Category distribution
+    categories: dict[str, int] = {}
+    for sample in pack_samples:
+        cat = get_sample_category(sample.get("tags", [])) or "other"
+        categories[cat] = categories.get(cat, 0) + 1
+
+    # Spectral distribution (quadrants)
+    quadrants = {"dark_soft": 0, "dark_punchy": 0, "bright_soft": 0, "bright_punchy": 0}
+    for sample in pack_samples:
+        if sample.get("map_x") is None:
+            continue
+        x, y = sample["map_x"], sample["map_y"]
+        if y < 0.5:
+            if x < 0.5:
+                quadrants["dark_soft"] += 1
+            else:
+                quadrants["dark_punchy"] += 1
+        else:
+            if x < 0.5:
+                quadrants["bright_soft"] += 1
+            else:
+                quadrants["bright_punchy"] += 1
+
+    # Centroid
+    centroid = get_pack_centroid(pack_samples)
+
+    # Common tags
+    common_tags = get_common_tags(pack_samples)
+
+    # Suggestions for balance
+    suggestions = []
+    total = len(pack_samples)
+
+    # Check percussion balance
+    perc_count = categories.get("kick", 0) + categories.get("snare", 0) + categories.get("hihat", 0)
+    if perc_count < total * 0.3 and total > 5:
+        suggestions.append("Consider adding more percussion")
+
+    # Check spectral balance
+    total_positioned = sum(quadrants.values())
+    if total_positioned > 0:
+        dominant = max(quadrants, key=quadrants.get)
+        if quadrants[dominant] > total_positioned * 0.6:
+            opposite = {
+                "dark_soft": "bright_punchy",
+                "dark_punchy": "bright_soft",
+                "bright_soft": "dark_punchy",
+                "bright_punchy": "dark_soft",
+            }[dominant]
+            suggestions.append(f"Pack leans {dominant.replace('_', ' ')}; consider {opposite.replace('_', ' ')} samples")
+
+    return {
+        "total": total,
+        "categories": categories,
+        "spectral_quadrants": quadrants,
+        "centroid": centroid,
+        "common_tags": common_tags,
+        "next_categories": get_next_categories(pack_samples),
+        "suggestions": suggestions,
+    }

@@ -36,7 +36,7 @@
         }
 
         #sidebar {
-            width: 320px;
+            width: 340px;
             background: #12121a;
             border-left: 1px solid #2a2a3a;
             display: flex;
@@ -60,13 +60,44 @@
             color: #888;
         }
 
+        /* Mode toggle */
+        .mode-toggle {
+            display: flex;
+            padding: 8px 16px;
+            gap: 8px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .mode-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .mode-btn.active {
+            background: #4a6fa5;
+            border-color: #4a6fa5;
+            color: #fff;
+        }
+
         .filters {
-            padding: 16px;
+            padding: 12px 16px;
             border-bottom: 1px solid #2a2a3a;
         }
 
         .filter-group {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .filter-group label {
@@ -103,6 +134,175 @@
             background: #4a6fa5;
             border-color: #4a6fa5;
             color: #fff;
+        }
+
+        /* Pack Builder Section */
+        .pack-builder {
+            border-bottom: 1px solid #2a2a3a;
+            display: none;
+        }
+
+        .pack-builder.visible {
+            display: block;
+        }
+
+        .pack-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1a1a24;
+        }
+
+        .pack-header h3 {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .pack-count {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .pack-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .pack-action-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .pack-action-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .pack-action-btn.primary {
+            background: #4a6fa5;
+            border-color: #4a6fa5;
+            color: #fff;
+        }
+
+        .pack-action-btn.danger {
+            border-color: #a54a4a;
+            color: #f88;
+        }
+
+        .pack-categories {
+            padding: 8px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .category-badge {
+            padding: 3px 8px;
+            font-size: 10px;
+            background: #2a2a3a;
+            border-radius: 4px;
+            color: #aaa;
+        }
+
+        .category-badge.kick { background: #4a2a2a; color: #f88; }
+        .category-badge.snare { background: #2a3a4a; color: #8cf; }
+        .category-badge.hihat { background: #4a4a2a; color: #ff8; }
+        .category-badge.bass { background: #3a2a4a; color: #c8f; }
+        .category-badge.synth { background: #2a4a3a; color: #8fc; }
+        .category-badge.perc { background: #4a3a2a; color: #fc8; }
+
+        /* Suggestions Section */
+        .suggestions-section {
+            padding: 12px 16px;
+            background: #0f1518;
+        }
+
+        .suggestions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .suggestions-header h4 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #6a9;
+        }
+
+        .next-categories {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .suggestion-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-left: 3px solid #4a6fa5;
+        }
+
+        .suggestion-item:hover {
+            background: #2a2a34;
+        }
+
+        .suggestion-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .suggestion-name {
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggestion-reason {
+            font-size: 10px;
+            color: #6a9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggestion-add {
+            padding: 4px 8px;
+            font-size: 10px;
+            background: #2a4a3a;
+            border: none;
+            color: #8fc;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .suggestion-add:hover {
+            background: #3a5a4a;
+        }
+
+        /* Pack balance */
+        .pack-balance {
+            padding: 8px 16px;
+            font-size: 11px;
+            color: #888;
+        }
+
+        .balance-warning {
+            color: #fa8;
+            font-size: 10px;
+            margin-top: 4px;
         }
 
         #sample-info {
@@ -160,6 +360,34 @@
         .sample-tag.character { background: #4a2a3a; color: #f8c; }
         .sample-tag.mood { background: #2a3a4a; color: #8cf; }
         .sample-tag.genre { background: #4a3a2a; color: #fc8; }
+
+        .sample-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .sample-action-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 11px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .sample-action-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .sample-action-btn.in-pack {
+            background: #2a4a3a;
+            border-color: #2a4a3a;
+            color: #8fc;
+        }
 
         #audio-player {
             padding: 16px;
@@ -331,6 +559,40 @@
             height: 8px;
             border-radius: 50%;
         }
+
+        /* Pack items in sidebar */
+        .pack-items {
+            max-height: 150px;
+            overflow-y: auto;
+            padding: 0 16px 8px;
+        }
+
+        .pack-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+            margin-bottom: 3px;
+            font-size: 11px;
+        }
+
+        .pack-item-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pack-item-remove {
+            color: #666;
+            cursor: pointer;
+            padding: 2px 4px;
+        }
+
+        .pack-item-remove:hover {
+            color: #f88;
+        }
     </style>
 </head>
 <body>
@@ -355,7 +617,13 @@
                 <h1>Spectral Map</h1>
                 <div class="stats" id="stats">Loading...</div>
             </div>
-            <div class="filters">
+
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="explore">Explore</button>
+                <button class="mode-btn" data-mode="build">Build Pack</button>
+            </div>
+
+            <div class="filters" id="explore-filters">
                 <div class="filter-group">
                     <label>Color by</label>
                     <div class="tag-filters">
@@ -370,6 +638,30 @@
                 </div>
                 <div class="color-legend" id="color-legend"></div>
             </div>
+
+            <div class="pack-builder" id="pack-builder">
+                <div class="pack-header">
+                    <div>
+                        <h3>Pack Builder</h3>
+                        <span class="pack-count" id="pack-count">0 samples</span>
+                    </div>
+                    <div class="pack-actions">
+                        <button class="pack-action-btn danger" id="pack-clear">Clear</button>
+                        <button class="pack-action-btn primary" id="pack-export">Export</button>
+                    </div>
+                </div>
+                <div class="pack-categories" id="pack-categories"></div>
+                <div class="pack-items" id="pack-items"></div>
+                <div class="suggestions-section" id="suggestions-section">
+                    <div class="suggestions-header">
+                        <h4>Suggested Next</h4>
+                        <span class="next-categories" id="next-categories"></span>
+                    </div>
+                    <div id="suggestions-list"></div>
+                </div>
+                <div class="pack-balance" id="pack-balance"></div>
+            </div>
+
             <div id="sample-info">
                 <div class="sample-card" id="hover-info" style="display: none;">
                     <h3 id="hover-filename">-</h3>
@@ -380,12 +672,16 @@
                         <dt>Position</dt><dd id="hover-position">-</dd>
                     </dl>
                     <div class="sample-tags" id="hover-tags"></div>
+                    <div class="sample-actions" id="sample-actions">
+                        <button class="sample-action-btn" id="add-to-pack-btn">Add to Pack</button>
+                    </div>
                 </div>
                 <div class="neighbors-section" id="neighbors-section" style="display: none;">
                     <h4>Similar Samples</h4>
                     <div id="neighbors-list"></div>
                 </div>
             </div>
+
             <div id="audio-player">
                 <div class="player-controls">
                     <button class="play-btn" id="play-btn" disabled>
@@ -410,10 +706,15 @@
         let audioElement = null;
         let isPlaying = false;
         let deckgl = null;
+        let mode = 'explore';  // 'explore' or 'build'
+
+        // Pack builder state
+        let packSamples = [];  // Sample objects in the pack
+        let suggestions = [];  // Current suggestions
+        let packAnalysis = null;
 
         // Tag colors
         const TAG_COLORS = {
-            // Instruments
             kick: [220, 80, 80],
             snare: [80, 160, 220],
             hihat: [220, 200, 80],
@@ -427,9 +728,12 @@
             perc: [180, 140, 100],
             '808': [200, 60, 100],
             '909': [100, 60, 200],
-            // Default
             default: [120, 120, 140]
         };
+
+        // Suggestion colors (bright green)
+        const SUGGESTION_COLOR = [100, 220, 150];
+        const PACK_COLOR = [80, 200, 255];
 
         // Initialize
         async function init() {
@@ -496,12 +800,26 @@
         }
 
         function getColorForSample(sample) {
+            const packIds = new Set(packSamples.map(s => s.id));
+            const suggestionIds = new Set(suggestions.map(s => s.id));
+
+            // In build mode, highlight pack and suggestions
+            if (mode === 'build') {
+                if (packIds.has(sample.id)) {
+                    return PACK_COLOR;
+                }
+                if (suggestionIds.has(sample.id)) {
+                    return SUGGESTION_COLOR;
+                }
+                // Dim other samples
+                return [80, 80, 90];
+            }
+
+            // Explore mode - normal coloring
             if (colorMode === 'brightness') {
-                // Y position = brightness
                 const brightness = Math.floor(sample.y * 255);
                 return [brightness, brightness * 0.8, 255 - brightness * 0.5];
             } else if (colorMode === 'energy') {
-                // X position = energy
                 const energy = sample.x;
                 return [
                     Math.floor(100 + energy * 155),
@@ -509,7 +827,6 @@
                     Math.floor(100 + (1 - energy) * 100)
                 ];
             } else {
-                // Color by primary tag
                 const tags = sample.tags || [];
                 for (const tag of tags) {
                     if (TAG_COLORS[tag]) {
@@ -521,9 +838,15 @@
         }
 
         function updateLayers() {
-            const filteredSamples = activeTagFilter
-                ? samples.filter(s => s.tags && s.tags.includes(activeTagFilter))
-                : samples;
+            const packIds = new Set(packSamples.map(s => s.id));
+            const suggestionIds = new Set(suggestions.map(s => s.id));
+
+            let filteredSamples = samples;
+
+            // In explore mode, apply tag filter
+            if (mode === 'explore' && activeTagFilter) {
+                filteredSamples = samples.filter(s => s.tags && s.tags.includes(activeTagFilter));
+            }
 
             const scatterLayer = new deck.ScatterplotLayer({
                 id: 'samples',
@@ -532,6 +855,11 @@
                 getRadius: d => {
                     if (selectedSample && d.id === selectedSample.id) return 0.015;
                     if (hoveredSample && d.id === hoveredSample.id) return 0.012;
+                    if (mode === 'build') {
+                        if (packIds.has(d.id)) return 0.012;
+                        if (suggestionIds.has(d.id)) return 0.010;
+                        return 0.006;
+                    }
                     return 0.008;
                 },
                 getFillColor: d => {
@@ -542,23 +870,36 @@
                     if (hoveredSample && d.id === hoveredSample.id) {
                         return [...color, 230];
                     }
+                    if (mode === 'build') {
+                        if (packIds.has(d.id)) return [...color, 255];
+                        if (suggestionIds.has(d.id)) return [...color, 220];
+                        return [...color, 100];
+                    }
                     return [...color, 180];
                 },
                 getLineColor: d => {
                     if (selectedSample && d.id === selectedSample.id) {
                         return [255, 255, 255, 255];
                     }
+                    if (mode === 'build' && packIds.has(d.id)) {
+                        return [255, 255, 255, 200];
+                    }
                     return [0, 0, 0, 0];
                 },
-                getLineWidth: d => selectedSample && d.id === selectedSample.id ? 2 : 0,
+                getLineWidth: d => {
+                    if (selectedSample && d.id === selectedSample.id) return 2;
+                    if (mode === 'build' && packIds.has(d.id)) return 1;
+                    return 0;
+                },
                 stroked: true,
                 lineWidthUnits: 'pixels',
                 radiusUnits: 'common',
                 pickable: true,
                 updateTriggers: {
-                    getRadius: [selectedSample?.id, hoveredSample?.id],
-                    getFillColor: [selectedSample?.id, hoveredSample?.id, colorMode],
-                    getLineColor: [selectedSample?.id],
+                    getRadius: [selectedSample?.id, hoveredSample?.id, mode, packSamples.length, suggestions.length],
+                    getFillColor: [selectedSample?.id, hoveredSample?.id, colorMode, mode, packSamples.length, suggestions.length],
+                    getLineColor: [selectedSample?.id, mode, packSamples.length],
+                    getLineWidth: [selectedSample?.id, mode, packSamples.length],
                 },
             });
 
@@ -571,18 +912,13 @@
             if (info.object) {
                 hoveredSample = info.object;
 
-                // Position tooltip
                 tooltip.style.left = (info.x + 10) + 'px';
                 tooltip.style.top = (info.y + 10) + 'px';
                 tooltip.querySelector('.filename').textContent = info.object.filename;
                 tooltip.querySelector('.tags').textContent = (info.object.tags || []).slice(0, 5).join(', ');
                 tooltip.classList.add('visible');
 
-                // Update hover info panel
                 updateHoverInfo(info.object);
-
-                // Preview audio on hover (optional - can be enabled)
-                // previewAudio(info.object);
             } else {
                 hoveredSample = null;
                 tooltip.classList.remove('visible');
@@ -601,22 +937,18 @@
             selectedSample = sample;
             updateLayers();
 
-            // Load full sample details
             try {
                 const response = await fetch(`/api/sample/${sample.id}`);
                 const data = await response.json();
                 updateSampleInfo(data);
 
-                // Load neighbors
                 const neighborsResponse = await fetch(`/api/neighbors/${sample.id}?limit=5`);
                 const neighborsData = await neighborsResponse.json();
                 updateNeighbors(neighborsData.neighbors);
 
-                // Enable audio
                 document.getElementById('play-btn').disabled = false;
                 document.getElementById('now-playing').textContent = sample.filename;
 
-                // Preload audio
                 if (audioElement) {
                     audioElement.pause();
                 }
@@ -625,6 +957,8 @@
                     isPlaying = false;
                     updatePlayButton();
                 });
+
+                updateAddToPackButton();
             } catch (error) {
                 console.error('Failed to load sample details:', error);
             }
@@ -648,10 +982,11 @@
                 const category = getTagCategory(tag);
                 return `<span class="sample-tag ${category}">${tag}</span>`;
             }).join('');
+
+            updateAddToPackButton();
         }
 
         function updateSampleInfo(sample) {
-            // Same as hover info but with full details
             updateHoverInfo({
                 filename: sample.filename,
                 duration_ms: sample.duration_ms,
@@ -680,7 +1015,6 @@
                 </div>
             `).join('');
 
-            // Add click handlers
             list.querySelectorAll('.neighbor-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const id = parseInt(item.dataset.id);
@@ -691,7 +1025,6 @@
         }
 
         function getTagCategory(tag) {
-            // Simple heuristic - could be improved with actual category data
             const instruments = ['kick', 'snare', 'hihat', 'clap', 'bass', 'pad', 'synth', 'vocal', 'fx', 'loop', 'perc', '808', '909'];
             const characters = ['punchy', 'soft', 'distorted', 'analog', 'digital', 'layered', 'wide'];
             const moods = ['dark', 'bright', 'warm', 'aggressive', 'mellow', 'eerie', 'vintage'];
@@ -706,7 +1039,7 @@
 
         function renderTagFilters(tags) {
             const container = document.getElementById('tag-filters');
-            const allTags = Object.values(tags).flat().slice(0, 12); // Limit to 12 tags
+            const allTags = Object.values(tags).flat().slice(0, 12);
 
             container.innerHTML = allTags.map(tag => `
                 <button class="tag-btn" data-tag="${tag}">${tag}</button>
@@ -771,6 +1104,17 @@
         }
 
         function setupEventListeners() {
+            // Mode toggle
+            document.querySelectorAll('[data-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    mode = btn.dataset.mode;
+                    updateModeUI();
+                    updateLayers();
+                });
+            });
+
             // Color mode buttons
             document.querySelectorAll('[data-color]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -791,7 +1135,230 @@
                     e.preventDefault();
                     togglePlay();
                 }
+                // 'A' to add to pack
+                if (e.code === 'KeyA' && selectedSample && mode === 'build') {
+                    e.preventDefault();
+                    toggleSampleInPack(selectedSample);
+                }
             });
+
+            // Pack builder buttons
+            document.getElementById('pack-clear').addEventListener('click', clearPack);
+            document.getElementById('pack-export').addEventListener('click', exportPack);
+            document.getElementById('add-to-pack-btn').addEventListener('click', () => {
+                if (selectedSample) {
+                    toggleSampleInPack(selectedSample);
+                }
+            });
+        }
+
+        function updateModeUI() {
+            const exploreFilters = document.getElementById('explore-filters');
+            const packBuilder = document.getElementById('pack-builder');
+
+            if (mode === 'explore') {
+                exploreFilters.style.display = 'block';
+                packBuilder.classList.remove('visible');
+            } else {
+                exploreFilters.style.display = 'none';
+                packBuilder.classList.add('visible');
+                refreshSuggestions();
+            }
+
+            updateAddToPackButton();
+        }
+
+        function updateAddToPackButton() {
+            const btn = document.getElementById('add-to-pack-btn');
+            const actions = document.getElementById('sample-actions');
+
+            if (mode === 'build') {
+                actions.style.display = 'flex';
+                if (selectedSample && packSamples.find(s => s.id === selectedSample.id)) {
+                    btn.textContent = 'Remove from Pack';
+                    btn.classList.add('in-pack');
+                } else {
+                    btn.textContent = 'Add to Pack';
+                    btn.classList.remove('in-pack');
+                }
+            } else {
+                actions.style.display = 'none';
+            }
+        }
+
+        // Pack builder functions
+        function toggleSampleInPack(sample) {
+            const idx = packSamples.findIndex(s => s.id === sample.id);
+            if (idx >= 0) {
+                packSamples.splice(idx, 1);
+            } else {
+                packSamples.push(sample);
+            }
+            updatePackUI();
+            refreshSuggestions();
+            updateAddToPackButton();
+            updateLayers();
+        }
+
+        function addSuggestionToPack(suggestionId) {
+            const suggestion = suggestions.find(s => s.id === suggestionId);
+            if (suggestion && !packSamples.find(s => s.id === suggestionId)) {
+                // Find full sample data
+                const sample = samples.find(s => s.id === suggestionId);
+                if (sample) {
+                    packSamples.push(sample);
+                    updatePackUI();
+                    refreshSuggestions();
+                    updateLayers();
+                }
+            }
+        }
+
+        function removeSampleFromPack(sampleId) {
+            packSamples = packSamples.filter(s => s.id !== sampleId);
+            updatePackUI();
+            refreshSuggestions();
+            updateAddToPackButton();
+            updateLayers();
+        }
+
+        function clearPack() {
+            packSamples = [];
+            suggestions = [];
+            packAnalysis = null;
+            updatePackUI();
+            updateLayers();
+        }
+
+        async function refreshSuggestions() {
+            if (packSamples.length === 0) {
+                suggestions = [];
+                packAnalysis = null;
+                updateSuggestionsUI();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/suggest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pack_ids: packSamples.map(s => s.id),
+                        limit: 8,
+                    }),
+                });
+                const data = await response.json();
+                suggestions = data.suggestions || [];
+                packAnalysis = data.analysis;
+                updateSuggestionsUI();
+                updateLayers();
+            } catch (error) {
+                console.error('Failed to get suggestions:', error);
+            }
+        }
+
+        function updatePackUI() {
+            // Update count
+            document.getElementById('pack-count').textContent = `${packSamples.length} samples`;
+
+            // Update category badges
+            const categories = {};
+            packSamples.forEach(s => {
+                const tags = s.tags || [];
+                for (const tag of tags) {
+                    if (['kick', 'snare', 'hihat', 'bass', 'synth', 'perc', 'fx', 'vocal'].includes(tag)) {
+                        categories[tag] = (categories[tag] || 0) + 1;
+                        break;
+                    }
+                }
+            });
+
+            const catContainer = document.getElementById('pack-categories');
+            catContainer.innerHTML = Object.entries(categories)
+                .map(([cat, count]) => `<span class="category-badge ${cat}">${cat}: ${count}</span>`)
+                .join('');
+
+            // Update pack items list
+            const itemsContainer = document.getElementById('pack-items');
+            itemsContainer.innerHTML = packSamples.map(s => `
+                <div class="pack-item">
+                    <span class="pack-item-name">${s.filename}</span>
+                    <span class="pack-item-remove" data-id="${s.id}">&times;</span>
+                </div>
+            `).join('');
+
+            itemsContainer.querySelectorAll('.pack-item-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeSampleFromPack(parseInt(btn.dataset.id));
+                });
+            });
+        }
+
+        function updateSuggestionsUI() {
+            const listContainer = document.getElementById('suggestions-list');
+            const nextCats = document.getElementById('next-categories');
+            const balanceContainer = document.getElementById('pack-balance');
+
+            if (!suggestions.length) {
+                listContainer.innerHTML = '<div style="font-size: 11px; color: #666; padding: 8px;">Add samples to get suggestions</div>';
+                nextCats.textContent = '';
+                balanceContainer.innerHTML = '';
+                return;
+            }
+
+            // Show next categories
+            if (packAnalysis && packAnalysis.next_categories) {
+                nextCats.textContent = `Looking for: ${packAnalysis.next_categories.join(', ')}`;
+            }
+
+            // Show suggestions
+            listContainer.innerHTML = suggestions.map(s => `
+                <div class="suggestion-item" data-id="${s.id}">
+                    <div class="suggestion-info">
+                        <div class="suggestion-name">${s.filename}</div>
+                        <div class="suggestion-reason">${s.reason}</div>
+                    </div>
+                    <button class="suggestion-add" data-id="${s.id}">+ Add</button>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            listContainer.querySelectorAll('.suggestion-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = parseInt(item.dataset.id);
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) selectSample(sample);
+                });
+            });
+
+            listContainer.querySelectorAll('.suggestion-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    addSuggestionToPack(parseInt(btn.dataset.id));
+                });
+            });
+
+            // Show balance warnings
+            if (packAnalysis && packAnalysis.suggestions && packAnalysis.suggestions.length > 0) {
+                balanceContainer.innerHTML = packAnalysis.suggestions
+                    .map(s => `<div class="balance-warning">${s}</div>`)
+                    .join('');
+            } else {
+                balanceContainer.innerHTML = '';
+            }
+        }
+
+        function exportPack() {
+            if (packSamples.length === 0) {
+                alert('Add samples to the pack first');
+                return;
+            }
+
+            // For now, just show the sample IDs
+            // In a full implementation, this would trigger the CLI export
+            const ids = packSamples.map(s => s.id).join(',');
+            alert(`Pack ready to export!\n\nRun this command:\nsoundpack export --ids ${ids} --name "MyPack"`);
         }
 
         function togglePlay() {
