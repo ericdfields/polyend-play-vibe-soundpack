@@ -2,14 +2,20 @@
 
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any
+
+# IMMEDIATE print at module load time
+print("[SERVER.PY] Module loading...", file=sys.stderr, flush=True)
 
 from fastapi import FastAPI, HTTPException, Query
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+print("[SERVER.PY] Module loaded successfully", file=sys.stderr, flush=True)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -49,19 +55,18 @@ def get_db() -> Database:
 async def index():
     """Serve the main visualization page."""
     html_path = Path(__file__).parent / "static" / "index.html"
-    # Force print to terminal (bypasses logging issues)
-    print(f"[INDEX] __file__ = {__file__}")
-    print(f"[INDEX] html_path = {html_path}")
-    print(f"[INDEX] html_path.exists() = {html_path.exists()}")
+    # Force print to stderr with flush (bypasses buffering)
+    print(f"[INDEX] __file__ = {__file__}", file=sys.stderr, flush=True)
+    print(f"[INDEX] html_path = {html_path}", file=sys.stderr, flush=True)
+    print(f"[INDEX] html_path.exists() = {html_path.exists()}", file=sys.stderr, flush=True)
     if html_path.exists():
         content = html_path.read_text()
-        print(f"[INDEX] HTML length = {len(content)} chars")
-        print(f"[INDEX] First 200 chars: {content[:200]}")
+        print(f"[INDEX] HTML length = {len(content)} chars", file=sys.stderr, flush=True)
         # Check if our debug log is in the file
         has_debug = '=== Spectral Map JS Loading ===' in content
-        print(f"[INDEX] Contains debug log: {has_debug}")
+        print(f"[INDEX] Contains debug log: {has_debug}", file=sys.stderr, flush=True)
         return HTMLResponse(content=content)
-    print("[INDEX] ERROR: Static files not found!")
+    print("[INDEX] ERROR: Static files not found!", file=sys.stderr, flush=True)
     return HTMLResponse(content="<h1>Spectral Map</h1><p>Static files not found</p>")
 
 
