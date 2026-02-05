@@ -49,13 +49,19 @@ def get_db() -> Database:
 async def index():
     """Serve the main visualization page."""
     html_path = Path(__file__).parent / "static" / "index.html"
-    logger.info(f"Serving index.html from: {html_path}")
-    logger.info(f"File exists: {html_path.exists()}")
+    # Force print to terminal (bypasses logging issues)
+    print(f"[INDEX] __file__ = {__file__}")
+    print(f"[INDEX] html_path = {html_path}")
+    print(f"[INDEX] html_path.exists() = {html_path.exists()}")
     if html_path.exists():
         content = html_path.read_text()
-        logger.info(f"HTML content length: {len(content)} chars")
+        print(f"[INDEX] HTML length = {len(content)} chars")
+        print(f"[INDEX] First 200 chars: {content[:200]}")
+        # Check if our debug log is in the file
+        has_debug = '=== Spectral Map JS Loading ===' in content
+        print(f"[INDEX] Contains debug log: {has_debug}")
         return HTMLResponse(content=content)
-    logger.error("Static files not found!")
+    print("[INDEX] ERROR: Static files not found!")
     return HTMLResponse(content="<h1>Spectral Map</h1><p>Static files not found</p>")
 
 
