@@ -15,6 +15,14 @@ from soundpack.db import Database
 from soundpack.exporter import export_pack, get_folder_for_tags
 from soundpack.generator import parse_prompt_simple, parse_prompt_with_ai, select_samples_for_pack, generate_pack_name
 from soundpack.tagger import suggest_tags, extract_tags_from_filename
+from soundpack.map import (
+    extract_map_features,
+    features_to_vector,
+    compute_embeddings,
+    export_map_data,
+    find_neighbors,
+    MAP_VERSION,
+)
 
 console = Console()
 
@@ -950,6 +958,216 @@ def _pct(part: int, total: int) -> str:
     if total == 0:
         return "0%"
     return f"{100 * part // total}%"
+
+
+# Map command group
+@cli.group("map")
+def map_group():
+    """Spectral map visualization commands."""
+    pass
+
+
+@map_group.command("compute")
+@click.option(
+    "--algorithm",
+    "-a",
+    type=click.Choice(["umap", "tsne"]),
+    default="umap",
+    help="Dimensionality reduction algorithm",
+)
+@click.option("--force", "-f", is_flag=True, help="Recompute all features even if already computed")
+@click.option("--features-only", is_flag=True, help="Only extract features, skip embedding")
+@pass_context
+def map_compute(ctx, algorithm: str, force: bool, features_only: bool):
+    """Compute spectral map positions for samples.
+
+    This extracts audio features and computes 2D positions for visualization.
+    Features are cached in the database for incremental updates.
+    """
+    import json
+    import numpy as np
+
+    # Get samples to process
+    if force:
+        samples = ctx.db.list_samples()
+    else:
+        samples = ctx.db.get_samples_for_map(map_version=MAP_VERSION)
+
+    if not samples:
+        console.print("[yellow]No samples need map computation[/yellow]")
+        map_stats = ctx.db.get_map_stats()
+        console.print(f"  Samples with positions: {map_stats['samples_with_positions']}")
+        return
+
+    console.print(f"Computing spectral map for {len(samples)} samples...")
+
+    # Phase 1: Extract features
+    console.print("\n[bold]Phase 1: Extracting audio features[/bold]")
+    features_list = []
+    sample_ids = []
+
+    with console.status("[bold green]Extracting features...") as status:
+        for i, sample in enumerate(samples):
+            try:
+                status.update(f"[bold green]Extracting features... ({i+1}/{len(samples)}) {sample['filename']}")
+
+                # Check if we have cached features and not forcing recompute
+                if not force and sample.get("map_features_json"):
+                    features = json.loads(sample["map_features_json"])
+                else:
+                    features = extract_map_features(sample["file_path"])
+                    # Cache features in database
+                    ctx.db.update_sample_map_features(
+                        sample["id"], json.dumps(features), MAP_VERSION
+                    )
+
+                features_list.append(features)
+                sample_ids.append(sample["id"])
+
+            except Exception as e:
+                console.print(f"  [red]Error processing {sample['filename']}: {e}[/red]")
+
+    console.print(f"  Extracted features for {len(features_list)} samples")
+
+    if features_only:
+        console.print("[bold green]Feature extraction complete[/bold green]")
+        return
+
+    if len(features_list) < 2:
+        console.print("[yellow]Need at least 2 samples to compute map positions[/yellow]")
+        return
+
+    # Phase 2: Convert to vectors
+    console.print("\n[bold]Phase 2: Computing embeddings[/bold]")
+    vectors = np.array([features_to_vector(f) for f in features_list])
+    console.print(f"  Feature vector dimension: {vectors.shape[1]}")
+
+    # Phase 3: Dimensionality reduction
+    console.print(f"  Using {algorithm.upper()} for dimensionality reduction...")
+    positions = compute_embeddings(vectors, algorithm=algorithm)
+
+    # Phase 4: Save positions to database
+    console.print("\n[bold]Phase 3: Saving positions[/bold]")
+    position_updates = [
+        (sample_ids[i], float(positions[i, 0]), float(positions[i, 1]))
+        for i in range(len(sample_ids))
+    ]
+    ctx.db.update_map_positions_batch(position_updates)
+
+    console.print(f"  Saved {len(position_updates)} map positions")
+    console.print("\n[bold green]Map computation complete![/bold green]")
+
+    # Show map stats
+    map_stats = ctx.db.get_map_stats()
+    console.print(f"\n  Total samples with positions: {map_stats['samples_with_positions']}")
+
+
+@map_group.command("export")
+@click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Output file path")
+@click.option("--format", "-f", "fmt", type=click.Choice(["json", "csv"]), default="json", help="Output format")
+@pass_context
+def map_export(ctx, output: Path, fmt: str):
+    """Export map data for external visualization."""
+    samples = ctx.db.get_samples_with_map_data()
+
+    if not samples:
+        console.print("[yellow]No samples have map positions. Run 'soundpack map compute' first.[/yellow]")
+        return
+
+    # Build data with tags
+    import numpy as np
+
+    for sample in samples:
+        tags = ctx.db.get_sample_tags(sample["id"])
+        sample["tags"] = [t["name"] for t in tags]
+
+    positions = np.array([[s["map_x"], s["map_y"]] for s in samples])
+
+    export_map_data(samples, positions, output, format=fmt)
+    console.print(f"[green]Exported {len(samples)} samples to {output}[/green]")
+
+
+@map_group.command("stats")
+@pass_context
+def map_stats(ctx):
+    """Show spectral map statistics."""
+    stats = ctx.db.get_map_stats()
+    total = ctx.db.get_stats()["total_samples"]
+
+    console.print("\n[bold]Spectral Map Statistics[/bold]\n")
+
+    table = Table(show_header=False, box=None)
+    table.add_column("Label", style="dim")
+    table.add_column("Value", style="bold")
+
+    table.add_row("Samples with features", f"{stats['samples_with_features']} ({_pct(stats['samples_with_features'], total)})")
+    table.add_row("Samples with positions", f"{stats['samples_with_positions']} ({_pct(stats['samples_with_positions'], total)})")
+
+    console.print(table)
+
+    if stats["version_distribution"]:
+        console.print("\n[bold]Map Version Distribution[/bold]")
+        for version, count in stats["version_distribution"].items():
+            console.print(f"  Version {version}: {count} samples")
+
+
+@map_group.command("neighbors")
+@click.argument("sample_id", type=int)
+@click.option("--limit", "-n", default=10, help="Number of neighbors to show")
+@pass_context
+def map_neighbors(ctx, sample_id: int, limit: int):
+    """Find similar samples based on map position."""
+    import numpy as np
+
+    sample = ctx.db.get_sample(sample_id)
+    if not sample:
+        console.print(f"[red]Sample not found: {sample_id}[/red]")
+        raise SystemExit(1)
+
+    if sample.get("map_x") is None:
+        console.print(f"[yellow]Sample {sample_id} has no map position. Run 'soundpack map compute' first.[/yellow]")
+        return
+
+    # Get all samples with positions
+    all_samples = ctx.db.get_samples_with_map_data()
+    if len(all_samples) < 2:
+        console.print("[yellow]Not enough samples with map positions[/yellow]")
+        return
+
+    # Build position array and find the target index
+    positions = np.array([[s["map_x"], s["map_y"]] for s in all_samples])
+    sample_idx = next(
+        (i for i, s in enumerate(all_samples) if s["id"] == sample_id), None
+    )
+
+    if sample_idx is None:
+        console.print("[red]Sample not found in map data[/red]")
+        return
+
+    # Find neighbors
+    neighbors = find_neighbors(sample_idx, positions, k=limit)
+
+    console.print(f"\n[bold]Neighbors of {sample['filename']}[/bold]\n")
+
+    table = Table()
+    table.add_column("ID", style="cyan")
+    table.add_column("Filename")
+    table.add_column("Distance", justify="right")
+    table.add_column("Tags")
+
+    for idx, distance in neighbors:
+        neighbor = all_samples[idx]
+        tags = ctx.db.get_sample_tags(neighbor["id"])
+        tag_str = ", ".join(t["name"] for t in tags[:5])
+
+        table.add_row(
+            str(neighbor["id"]),
+            neighbor["filename"],
+            f"{distance:.4f}",
+            tag_str,
+        )
+
+    console.print(table)
 
 
 def main():
