@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spectral Map - Soundpack Manager</title>
     <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
-    <script src="https://unpkg.com/@luma.gl/core@latest/dist/dist.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -769,14 +768,19 @@
             const container = document.getElementById('map-container');
             const canvas = document.getElementById('deck-canvas');
 
+            // Scale positions to pixel space for better rendering
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const padding = 50;
+
             deckgl = new deck.DeckGL({
                 container: container,
                 canvas: canvas,
                 initialViewState: {
-                    target: [0.5, 0.5, 0],
+                    target: [width / 2, height / 2, 0],
                     zoom: 0,
-                    minZoom: -1,
-                    maxZoom: 4,
+                    minZoom: -2,
+                    maxZoom: 6,
                 },
                 controller: {
                     dragPan: true,
@@ -788,13 +792,18 @@
                     doubleClickZoom: true,
                 },
                 views: new deck.OrthographicView({
-                    flipY: false,
+                    flipY: true,
                 }),
                 layers: [],
                 onHover: handleHover,
                 onClick: handleClick,
                 getTooltip: null,
             });
+
+            // Store dimensions for position scaling
+            window.mapWidth = width - padding * 2;
+            window.mapHeight = height - padding * 2;
+            window.mapPadding = padding;
 
             updateLayers();
         }
@@ -848,19 +857,24 @@
                 filteredSamples = samples.filter(s => s.tags && s.tags.includes(activeTagFilter));
             }
 
+            // Scale factor for positions (0-1 to pixel coordinates)
+            const scaleX = window.mapWidth || 800;
+            const scaleY = window.mapHeight || 600;
+            const padding = window.mapPadding || 50;
+
             const scatterLayer = new deck.ScatterplotLayer({
                 id: 'samples',
                 data: filteredSamples,
-                getPosition: d => [d.x, d.y],
+                getPosition: d => [padding + d.x * scaleX, padding + d.y * scaleY],
                 getRadius: d => {
-                    if (selectedSample && d.id === selectedSample.id) return 0.015;
-                    if (hoveredSample && d.id === hoveredSample.id) return 0.012;
+                    if (selectedSample && d.id === selectedSample.id) return 8;
+                    if (hoveredSample && d.id === hoveredSample.id) return 7;
                     if (mode === 'build') {
-                        if (packIds.has(d.id)) return 0.012;
-                        if (suggestionIds.has(d.id)) return 0.010;
-                        return 0.006;
+                        if (packIds.has(d.id)) return 7;
+                        if (suggestionIds.has(d.id)) return 6;
+                        return 3;
                     }
-                    return 0.008;
+                    return 5;
                 },
                 getFillColor: d => {
                     const color = getColorForSample(d);
@@ -893,7 +907,7 @@
                 },
                 stroked: true,
                 lineWidthUnits: 'pixels',
-                radiusUnits: 'common',
+                radiusUnits: 'pixels',
                 pickable: true,
                 updateTriggers: {
                     getRadius: [selectedSample?.id, hoveredSample?.id, mode, packSamples.length, suggestions.length],
