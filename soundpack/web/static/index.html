@@ -148,6 +148,78 @@
             background: #1a1a24;
         }
 
+        .pack-prompt {
+            padding: 10px 16px;
+            background: #0f1518;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .pack-prompt-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .pack-prompt input {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+            border: 1px solid #3a3a4a;
+            background: #1a1a24;
+            color: #e0e0e0;
+            border-radius: 4px;
+        }
+
+        .pack-prompt input:focus {
+            outline: none;
+            border-color: #4a6fa5;
+        }
+
+        .pack-prompt input::placeholder {
+            color: #666;
+        }
+
+        .pack-prompt button {
+            padding: 8px 14px;
+            font-size: 11px;
+            border: 1px solid #4a6fa5;
+            background: #4a6fa5;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .pack-prompt button:hover {
+            background: #5a7fb5;
+        }
+
+        .pack-prompt button:disabled {
+            background: #3a3a4a;
+            border-color: #3a3a4a;
+            cursor: not-allowed;
+        }
+
+        .pack-prompt-hint {
+            font-size: 10px;
+            color: #666;
+            margin-top: 6px;
+        }
+
+        .pack-prompt-message {
+            font-size: 11px;
+            color: #6a9;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .pack-prompt-message.visible {
+            display: block;
+        }
+
+        .pack-prompt-message.error {
+            color: #f88;
+        }
+
         .pack-header h3 {
             font-size: 13px;
             font-weight: 500;
@@ -688,6 +760,14 @@
                         <button class="pack-action-btn danger" id="pack-clear">Clear</button>
                         <button class="pack-action-btn primary" id="pack-export">Export</button>
                     </div>
+                </div>
+                <div class="pack-prompt" id="pack-prompt-section">
+                    <div class="pack-prompt-row">
+                        <input type="text" id="pack-prompt-input" placeholder="dark techno kicks, ambient pads..." />
+                        <button id="pack-prompt-start">Start</button>
+                    </div>
+                    <div class="pack-prompt-hint">Describe the vibe: instruments, mood, genre</div>
+                    <div class="pack-prompt-message" id="pack-prompt-message"></div>
                 </div>
                 <div class="pack-categories" id="pack-categories"></div>
                 <div class="pack-items" id="pack-items"></div>
@@ -1266,6 +1346,14 @@
                     toggleSampleInPack(selectedSample);
                 }
             });
+
+            // Prompt-based pack start
+            document.getElementById('pack-prompt-start').addEventListener('click', startPackFromPrompt);
+            document.getElementById('pack-prompt-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    startPackFromPrompt();
+                }
+            });
         }
 
         function updateModeUI() {
@@ -1408,6 +1496,75 @@
             packAnalysis = null;
             updatePackUI();
             updateLayers();
+            // Clear prompt message
+            const msgEl = document.getElementById('pack-prompt-message');
+            msgEl.classList.remove('visible', 'error');
+        }
+
+        async function startPackFromPrompt() {
+            const input = document.getElementById('pack-prompt-input');
+            const startBtn = document.getElementById('pack-prompt-start');
+            const msgEl = document.getElementById('pack-prompt-message');
+            const prompt = input.value.trim();
+
+            if (!prompt) {
+                msgEl.textContent = 'Enter a description to start';
+                msgEl.classList.add('visible', 'error');
+                return;
+            }
+
+            startBtn.disabled = true;
+            startBtn.textContent = 'Finding...';
+            msgEl.classList.remove('visible', 'error');
+
+            try {
+                const response = await fetch('/api/pack/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        limit: 8,
+                    }),
+                });
+                const data = await response.json();
+
+                if (data.samples && data.samples.length > 0) {
+                    // Clear existing pack and add the matched samples
+                    packSamples = [];
+                    for (const sample of data.samples) {
+                        // Find the full sample data from our samples array
+                        const fullSample = samples.find(s => s.id === sample.id);
+                        if (fullSample) {
+                            packSamples.push(fullSample);
+                        }
+                    }
+
+                    updatePackUI();
+                    updateLayers();
+                    refreshSuggestions();
+
+                    // Show success message
+                    msgEl.textContent = data.message;
+                    msgEl.classList.add('visible');
+                    msgEl.classList.remove('error');
+
+                    // Clear the input
+                    input.value = '';
+
+                    console.log(`Started pack with ${data.count} samples (${data.size_mb} MB)`);
+                    console.log(`Keywords: ${data.parsed_keywords.join(', ')}`);
+                } else {
+                    msgEl.textContent = data.message || 'No matching samples found';
+                    msgEl.classList.add('visible', 'error');
+                }
+            } catch (error) {
+                console.error('Start from prompt failed:', error);
+                msgEl.textContent = 'Failed to start pack. Check console.';
+                msgEl.classList.add('visible', 'error');
+            } finally {
+                startBtn.disabled = false;
+                startBtn.textContent = 'Start';
+            }
         }
 
         async function refreshSuggestions() {

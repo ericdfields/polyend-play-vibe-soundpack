@@ -363,6 +363,137 @@ async def analyze_pack(pack_ids: list[int]) -> dict[str, Any]:
     return analysis
 
 
+class PromptStartRequest(BaseModel):
+    prompt: str
+    limit: int = 8
+
+
+@app.post("/api/pack/start")
+async def start_pack_from_prompt(request: PromptStartRequest) -> dict[str, Any]:
+    """Start a pack build from a text prompt.
+
+    Parses the prompt for keywords (tags, moods, genres, instruments) and
+    returns matching samples to seed the pack builder.
+
+    Args:
+        request: PromptStartRequest with prompt and limit.
+
+    Returns:
+        Dict with matched samples and parsed keywords.
+    """
+    from soundpack.map import INSTRUMENT_CATEGORIES
+
+    prompt = request.prompt.lower()
+    limit = request.limit
+    database = get_db()
+
+    # Known keywords to look for
+    instruments = ["kick", "snare", "hihat", "hat", "clap", "bass", "pad",
+                   "synth", "vocal", "fx", "loop", "perc", "808", "909", "tom",
+                   "cymbal", "rim", "shaker", "lead", "keys", "piano"]
+    moods = ["dark", "bright", "warm", "aggressive", "mellow", "eerie",
+             "vintage", "modern", "dirty", "clean", "heavy", "light"]
+    characters = ["punchy", "soft", "distorted", "analog", "digital",
+                  "layered", "wide", "tight", "fat", "thin", "crispy", "muddy"]
+    genres = ["house", "techno", "ambient", "hiphop", "trap", "dnb",
+              "industrial", "minimal", "acid", "electro", "breakbeat", "dubstep"]
+
+    # Parse prompt for keywords
+    found_keywords = []
+    for word_list in [instruments, moods, characters, genres]:
+        for word in word_list:
+            if word in prompt:
+                found_keywords.append(word)
+
+    # Also check for multi-word phrases
+    phrases = ["drum and bass", "hip hop", "lo-fi", "lo fi", "lofi"]
+    phrase_mappings = {"drum and bass": "dnb", "hip hop": "hiphop",
+                       "lo-fi": "lofi", "lo fi": "lofi"}
+    for phrase in phrases:
+        if phrase in prompt:
+            mapped = phrase_mappings.get(phrase, phrase.replace(" ", ""))
+            if mapped not in found_keywords:
+                found_keywords.append(mapped)
+
+    # Load all samples with tags
+    all_samples = database.get_samples_with_map_data()
+    for sample in all_samples:
+        tags = database.get_sample_tags(sample["id"])
+        sample["tags"] = [t["name"] for t in tags]
+
+    # Score samples based on keyword matches
+    scored_samples = []
+    for sample in all_samples:
+        if sample.get("map_x") is None:
+            continue
+
+        sample_tags = [t.lower() for t in sample.get("tags", [])]
+        score = 0
+
+        for keyword in found_keywords:
+            if keyword in sample_tags:
+                score += 10
+            # Partial matches (e.g., "808" in "808_kick")
+            for tag in sample_tags:
+                if keyword in tag and keyword != tag:
+                    score += 3
+
+        if score > 0:
+            scored_samples.append((sample, score))
+
+    # Sort by score and take top matches
+    scored_samples.sort(key=lambda x: x[1], reverse=True)
+    matched = [s[0] for s in scored_samples[:limit]]
+
+    # If no matches found, try to find samples that match instrument categories
+    if not matched and found_keywords:
+        # Look for category matches
+        for keyword in found_keywords:
+            for cat, cat_tags in INSTRUMENT_CATEGORIES.items():
+                if keyword in cat_tags or keyword == cat:
+                    # Find samples in this category
+                    for sample in all_samples:
+                        if sample.get("map_x") is None:
+                            continue
+                        sample_tags = [t.lower() for t in sample.get("tags", [])]
+                        for tag in cat_tags:
+                            if tag in sample_tags and sample not in matched:
+                                matched.append(sample)
+                                if len(matched) >= limit:
+                                    break
+                        if len(matched) >= limit:
+                            break
+                if len(matched) >= limit:
+                    break
+            if len(matched) >= limit:
+                break
+
+    # Format response
+    formatted = []
+    for s in matched:
+        formatted.append({
+            "id": s["id"],
+            "filename": s["filename"],
+            "x": s.get("map_x"),
+            "y": s.get("map_y"),
+            "tags": s.get("tags", []),
+            "bpm": s.get("bpm"),
+            "file_size_bytes": s.get("file_size_bytes", 0) or 0,
+        })
+
+    # Calculate total size
+    total_bytes = sum(s.get("file_size_bytes", 0) or 0 for s in matched)
+    total_mb = total_bytes / (1024 * 1024)
+
+    return {
+        "samples": formatted,
+        "count": len(formatted),
+        "parsed_keywords": found_keywords,
+        "size_mb": round(total_mb, 2),
+        "message": f"Found {len(formatted)} samples matching: {', '.join(found_keywords)}" if found_keywords else "No keywords recognized. Try terms like 'dark techno kicks' or 'ambient pads'",
+    }
+
+
 class AutofillRequest(BaseModel):
     pack_ids: list[int]
     target_count: int = 64
