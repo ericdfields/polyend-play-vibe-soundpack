@@ -49,6 +49,12 @@ class Database:
                 is_loop BOOLEAN DEFAULT FALSE,
                 is_oneshot BOOLEAN DEFAULT TRUE,
 
+                -- Spectral map features
+                map_features_json TEXT,
+                map_x REAL,
+                map_y REAL,
+                map_version INTEGER,
+
                 -- Metadata
                 source TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -114,12 +120,29 @@ class Database:
 
     def _run_migrations(self) -> None:
         """Run schema migrations for existing databases."""
-        # Migration: Add file_size_bytes column if it doesn't exist
         cursor = self.conn.execute("PRAGMA table_info(samples)")
         columns = [row[1] for row in cursor.fetchall()]
 
+        # Migration: Add file_size_bytes column if it doesn't exist
         if "file_size_bytes" not in columns:
             self.conn.execute("ALTER TABLE samples ADD COLUMN file_size_bytes INTEGER")
+            self.conn.commit()
+
+        # Migration: Add spectral map columns
+        if "map_features_json" not in columns:
+            self.conn.execute("ALTER TABLE samples ADD COLUMN map_features_json TEXT")
+            self.conn.commit()
+
+        if "map_x" not in columns:
+            self.conn.execute("ALTER TABLE samples ADD COLUMN map_x REAL")
+            self.conn.commit()
+
+        if "map_y" not in columns:
+            self.conn.execute("ALTER TABLE samples ADD COLUMN map_y REAL")
+            self.conn.commit()
+
+        if "map_version" not in columns:
+            self.conn.execute("ALTER TABLE samples ADD COLUMN map_version INTEGER")
             self.conn.commit()
 
     def close(self) -> None:
@@ -454,6 +477,123 @@ class Database:
             (tag_name,),
         )
         return [dict(row) for row in cursor.fetchall()]
+
+    # Map operations
+
+    def get_samples_for_map(
+        self, include_computed: bool = False, map_version: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Get samples for spectral map computation.
+
+        Args:
+            include_computed: If True, include samples that already have map data.
+            map_version: If specified, only include samples with older map_version.
+
+        Returns:
+            List of sample dicts.
+        """
+        if include_computed:
+            cursor = self.conn.execute("SELECT * FROM samples")
+        elif map_version is not None:
+            cursor = self.conn.execute(
+                "SELECT * FROM samples WHERE map_version IS NULL OR map_version < ?",
+                (map_version,),
+            )
+        else:
+            cursor = self.conn.execute(
+                "SELECT * FROM samples WHERE map_x IS NULL OR map_y IS NULL"
+            )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def update_sample_map_features(
+        self, sample_id: int, features_json: str, map_version: int
+    ) -> None:
+        """Update sample's map features.
+
+        Args:
+            sample_id: Database ID of the sample.
+            features_json: JSON string of extracted features.
+            map_version: Version of the feature extraction algorithm.
+        """
+        self.conn.execute(
+            """
+            UPDATE samples
+            SET map_features_json = ?, map_version = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (features_json, map_version, sample_id),
+        )
+        self.conn.commit()
+
+    def update_sample_map_position(self, sample_id: int, x: float, y: float) -> None:
+        """Update sample's position on the spectral map.
+
+        Args:
+            sample_id: Database ID of the sample.
+            x: X coordinate (0-1).
+            y: Y coordinate (0-1).
+        """
+        self.conn.execute(
+            """
+            UPDATE samples SET map_x = ?, map_y = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (x, y, sample_id),
+        )
+        self.conn.commit()
+
+    def update_map_positions_batch(self, positions: list[tuple[int, float, float]]) -> None:
+        """Update map positions for multiple samples in a batch.
+
+        Args:
+            positions: List of (sample_id, x, y) tuples.
+        """
+        self.conn.executemany(
+            "UPDATE samples SET map_x = ?, map_y = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            [(x, y, sample_id) for sample_id, x, y in positions],
+        )
+        self.conn.commit()
+
+    def get_samples_with_map_data(self) -> list[dict[str, Any]]:
+        """Get all samples that have map coordinates.
+
+        Returns:
+            List of sample dicts with map_x and map_y.
+        """
+        cursor = self.conn.execute(
+            "SELECT * FROM samples WHERE map_x IS NOT NULL AND map_y IS NOT NULL"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_map_stats(self) -> dict[str, Any]:
+        """Get statistics about spectral map computation.
+
+        Returns:
+            Dict with map-related statistics.
+        """
+        stats: dict[str, Any] = {}
+
+        # Samples with features extracted
+        cursor = self.conn.execute(
+            "SELECT COUNT(*) FROM samples WHERE map_features_json IS NOT NULL"
+        )
+        stats["samples_with_features"] = cursor.fetchone()[0]
+
+        # Samples with positions
+        cursor = self.conn.execute(
+            "SELECT COUNT(*) FROM samples WHERE map_x IS NOT NULL AND map_y IS NOT NULL"
+        )
+        stats["samples_with_positions"] = cursor.fetchone()[0]
+
+        # Current map version distribution
+        cursor = self.conn.execute(
+            "SELECT map_version, COUNT(*) FROM samples GROUP BY map_version"
+        )
+        stats["version_distribution"] = {
+            row[0] if row[0] is not None else "none": row[1] for row in cursor.fetchall()
+        }
+
+        return stats
 
     # Stats operations
 

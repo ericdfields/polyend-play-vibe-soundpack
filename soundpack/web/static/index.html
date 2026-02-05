@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spectral Map - Soundpack Manager</title>
+    <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            height: 100vh;
+        }
+
+        #map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #sidebar {
+            width: 340px;
+            background: #12121a;
+            border-left: 1px solid #2a2a3a;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .sidebar-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-header .stats {
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Mode toggle */
+        .mode-toggle {
+            display: flex;
+            padding: 8px 16px;
+            gap: 8px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .mode-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .mode-btn.active {
+            background: #4a6fa5;
+            border-color: #4a6fa5;
+            color: #fff;
+        }
+
+        .filters {
+            padding: 12px 16px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .filter-group {
+            margin-bottom: 10px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .tag-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .tag-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tag-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .tag-btn.active {
+            background: #4a6fa5;
+            border-color: #4a6fa5;
+            color: #fff;
+        }
+
+        /* Pack Builder Section */
+        .pack-builder {
+            border-bottom: 1px solid #2a2a3a;
+            display: none;
+        }
+
+        .pack-builder.visible {
+            display: block;
+        }
+
+        .pack-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1a1a24;
+        }
+
+        .pack-header h3 {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .pack-count {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .pack-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .pack-action-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .pack-action-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .pack-action-btn.primary {
+            background: #4a6fa5;
+            border-color: #4a6fa5;
+            color: #fff;
+        }
+
+        .pack-action-btn.danger {
+            border-color: #a54a4a;
+            color: #f88;
+        }
+
+        .pack-categories {
+            padding: 8px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .category-badge {
+            padding: 3px 8px;
+            font-size: 10px;
+            background: #2a2a3a;
+            border-radius: 4px;
+            color: #aaa;
+        }
+
+        .category-badge.kick { background: #4a2a2a; color: #f88; }
+        .category-badge.snare { background: #2a3a4a; color: #8cf; }
+        .category-badge.hihat { background: #4a4a2a; color: #ff8; }
+        .category-badge.bass { background: #3a2a4a; color: #c8f; }
+        .category-badge.synth { background: #2a4a3a; color: #8fc; }
+        .category-badge.perc { background: #4a3a2a; color: #fc8; }
+        .category-badge.vocal { background: #4a2a4a; color: #f8c; }
+        .category-badge.fx { background: #3a3a3a; color: #aaa; }
+
+        /* Suggestions Section */
+        .suggestions-section {
+            padding: 8px 16px;
+            background: #0f1518;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .suggestions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .suggestions-header h4 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #6a9;
+        }
+
+        .next-categories {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .suggestion-item {
+            display: flex;
+            align-items: center;
+            padding: 6px;
+            background: #1a1a24;
+            border-radius: 4px;
+            margin-bottom: 3px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .suggestion-item:hover {
+            background: #2a2a34;
+        }
+
+        .suggestion-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .suggestion-name {
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggestion-reason {
+            font-size: 9px;
+            color: #6a9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggestion-add {
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
+            background: #2a4a3a;
+            border: none;
+            color: #8fc;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 6px;
+            flex-shrink: 0;
+        }
+
+        .suggestion-add:hover {
+            background: #3a5a4a;
+        }
+
+        /* Pack balance */
+        .pack-balance {
+            padding: 8px 16px;
+            font-size: 11px;
+            color: #888;
+        }
+
+        .balance-warning {
+            color: #fa8;
+            font-size: 10px;
+            margin-top: 4px;
+        }
+
+        #sample-info {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .sample-card {
+            background: #1a1a24;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .sample-card h3 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .sample-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .sample-meta dt {
+            color: #666;
+        }
+
+        .sample-meta dd {
+            color: #bbb;
+        }
+
+        .sample-tags {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .sample-tag {
+            padding: 2px 6px;
+            font-size: 10px;
+            background: #2a2a3a;
+            border-radius: 4px;
+            color: #aaa;
+        }
+
+        .sample-tag.instrument { background: #2a4a3a; color: #8fc; }
+        .sample-tag.character { background: #4a2a3a; color: #f8c; }
+        .sample-tag.mood { background: #2a3a4a; color: #8cf; }
+        .sample-tag.genre { background: #4a3a2a; color: #fc8; }
+
+        .sample-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .sample-action-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 11px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .sample-action-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .sample-action-btn.in-pack {
+            background: #2a4a3a;
+            border-color: #2a4a3a;
+            color: #8fc;
+        }
+
+        #audio-player {
+            padding: 16px;
+            border-top: 1px solid #2a2a3a;
+            background: #0f0f14;
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: #4a6fa5;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .play-btn:hover {
+            background: #5a7fb5;
+        }
+
+        .play-btn:disabled {
+            background: #3a3a4a;
+            cursor: not-allowed;
+        }
+
+        .waveform {
+            flex: 1;
+            height: 40px;
+            background: #1a1a24;
+            border-radius: 4px;
+        }
+
+        .now-playing {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 200px;
+            z-index: 1000;
+            display: none;
+        }
+
+        #tooltip.visible {
+            display: block;
+        }
+
+        #tooltip .filename {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        #tooltip .tags {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .axis-label {
+            position: absolute;
+            font-size: 10px;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .axis-label.top { top: 20px; left: 50%; transform: translateX(-50%); }
+        .axis-label.bottom { bottom: 20px; left: 50%; transform: translateX(-50%); }
+        .axis-label.left { left: 20px; top: 50%; transform: rotate(-90deg) translateX(-50%); transform-origin: left; }
+        .axis-label.right { right: 20px; top: 50%; transform: rotate(90deg) translateX(50%); transform-origin: right; }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #2a2a3a;
+            border-top-color: #4a6fa5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .neighbors-section {
+            margin-top: 16px;
+        }
+
+        .neighbors-section h4 {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .neighbor-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .neighbor-item:hover {
+            background: #2a2a34;
+        }
+
+        .neighbor-name {
+            flex: 1;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .neighbor-distance {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .color-legend {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #888;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Pack items in sidebar */
+        .pack-items {
+            max-height: 150px;
+            overflow-y: auto;
+            padding: 0 16px 8px;
+        }
+
+        .pack-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+            margin-bottom: 3px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .pack-item:hover {
+            background: #2a2a34;
+        }
+
+        .pack-item-play {
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: #2a4a3a;
+            color: #8fc;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 9px;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        .pack-item-play:hover {
+            background: #3a5a4a;
+        }
+
+        .pack-item-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pack-item-remove {
+            color: #666;
+            cursor: pointer;
+            padding: 2px 4px;
+        }
+
+        .pack-item-remove:hover {
+            color: #f88;
+        }
+
+        .suggestion-play {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: #2a3a4a;
+            color: #8cf;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .suggestion-play:hover {
+            background: #3a4a5a;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="map-container">
+            <div class="axis-label top">Bright</div>
+            <div class="axis-label bottom">Dark</div>
+            <div class="axis-label left">Soft</div>
+            <div class="axis-label right">Punchy</div>
+            <div id="tooltip">
+                <div class="filename"></div>
+                <div class="tags"></div>
+            </div>
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <div>Loading samples...</div>
+            </div>
+        </div>
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <h1>Spectral Map</h1>
+                <div class="stats" id="stats">Loading...</div>
+            </div>
+
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="explore">Explore</button>
+                <button class="mode-btn" data-mode="build">Build Pack</button>
+            </div>
+
+            <div class="filters" id="explore-filters">
+                <div class="filter-group">
+                    <label>Color by</label>
+                    <div class="tag-filters">
+                        <button class="tag-btn active" data-color="tag">Tag</button>
+                        <button class="tag-btn" data-color="brightness">Brightness</button>
+                        <button class="tag-btn" data-color="energy">Energy</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Filter by tag</label>
+                    <div class="tag-filters" id="tag-filters"></div>
+                </div>
+                <div class="color-legend" id="color-legend"></div>
+            </div>
+
+            <div class="pack-builder" id="pack-builder">
+                <div class="pack-header">
+                    <div>
+                        <h3>Pack Builder</h3>
+                        <span class="pack-count" id="pack-count">0 samples</span>
+                    </div>
+                    <div class="pack-actions">
+                        <button class="pack-action-btn danger" id="pack-clear">Clear</button>
+                        <button class="pack-action-btn primary" id="pack-export">Export</button>
+                    </div>
+                </div>
+                <div class="pack-categories" id="pack-categories"></div>
+                <div class="pack-items" id="pack-items"></div>
+                <div class="suggestions-section" id="suggestions-section">
+                    <div class="suggestions-header">
+                        <h4>Suggested Next</h4>
+                        <span class="next-categories" id="next-categories"></span>
+                    </div>
+                    <div id="suggestions-list"></div>
+                </div>
+                <div class="pack-balance" id="pack-balance"></div>
+            </div>
+
+            <div id="sample-info">
+                <div class="sample-card" id="hover-info" style="display: none;">
+                    <h3 id="hover-filename">-</h3>
+                    <dl class="sample-meta">
+                        <dt>Duration</dt><dd id="hover-duration">-</dd>
+                        <dt>BPM</dt><dd id="hover-bpm">-</dd>
+                        <dt>Key</dt><dd id="hover-key">-</dd>
+                        <dt>Position</dt><dd id="hover-position">-</dd>
+                    </dl>
+                    <div class="sample-tags" id="hover-tags"></div>
+                    <div class="sample-actions" id="sample-actions">
+                        <button class="sample-action-btn" id="add-to-pack-btn">Add to Pack</button>
+                    </div>
+                </div>
+                <div class="neighbors-section" id="neighbors-section" style="display: none;">
+                    <h4>Similar Samples</h4>
+                    <div id="neighbors-list"></div>
+                </div>
+            </div>
+
+            <div id="audio-player">
+                <div class="player-controls">
+                    <button class="play-btn" id="play-btn" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                    </button>
+                    <div class="waveform" id="waveform"></div>
+                </div>
+                <div class="now-playing" id="now-playing">No sample selected</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('=== Spectral Map JS Loading ===');
+
+        // State
+        let samples = [];
+        let selectedSample = null;
+        let hoveredSample = null;
+        let colorMode = 'tag';
+        let activeTagFilter = null;
+        let audioElement = null;
+        let isPlaying = false;
+        let deckgl = null;
+        let mode = 'explore';  // 'explore' or 'build'
+
+        // Pack builder state
+        let packSamples = [];  // Sample objects in the pack
+        let suggestions = [];  // Current suggestions
+        let packAnalysis = null;
+
+        // Tag colors
+        const TAG_COLORS = {
+            kick: [220, 80, 80],
+            snare: [80, 160, 220],
+            hihat: [220, 200, 80],
+            clap: [180, 100, 200],
+            bass: [100, 80, 180],
+            pad: [80, 180, 140],
+            synth: [140, 200, 100],
+            vocal: [220, 140, 180],
+            fx: [160, 160, 160],
+            loop: [200, 160, 100],
+            perc: [180, 140, 100],
+            '808': [200, 60, 100],
+            '909': [100, 60, 200],
+            default: [120, 120, 140]
+        };
+
+        // Suggestion colors (bright green)
+        const SUGGESTION_COLOR = [100, 220, 150];
+        const PACK_COLOR = [80, 200, 255];
+
+        // Initialize
+        async function init() {
+            console.log('=== init() called ===');
+            await loadSamples();
+            console.log('Samples loaded:', samples.length);
+            await loadTags();
+            initDeckGL();
+            setupEventListeners();
+            hideLoading();
+
+            // Force re-render after a short delay to ensure canvas is sized
+            setTimeout(() => {
+                const container = document.getElementById('map-container');
+                const rect = container.getBoundingClientRect();
+                window.mapWidth = (rect.width || window.innerWidth - 340) - 100;
+                window.mapHeight = (rect.height || window.innerHeight) - 100;
+                window.mapPadding = 50;
+                console.log('Map dimensions (delayed):', window.mapWidth, 'x', window.mapHeight, 'samples:', samples.length);
+                updateLayers();
+            }, 200);
+        }
+
+        async function loadSamples() {
+            try {
+                const response = await fetch('/api/map');
+                const data = await response.json();
+                samples = data.samples;
+                updateStats(data.total);
+            } catch (error) {
+                console.error('Failed to load samples:', error);
+            }
+        }
+
+        async function loadTags() {
+            try {
+                const response = await fetch('/api/tags');
+                const data = await response.json();
+                renderTagFilters(data.tags);
+            } catch (error) {
+                console.error('Failed to load tags:', error);
+            }
+        }
+
+        function initDeckGL() {
+            const container = document.getElementById('map-container');
+
+            // Get dimensions from bounding rect (more reliable than clientWidth/Height)
+            const rect = container.getBoundingClientRect();
+            const width = rect.width || window.innerWidth - 340;  // fallback: window width minus sidebar
+            const height = rect.height || window.innerHeight;
+            const padding = 50;
+
+            console.log('initDeckGL: container rect =', rect.width, 'x', rect.height);
+
+            // Store dimensions for position scaling
+            window.mapWidth = width - padding * 2;
+            window.mapHeight = height - padding * 2;
+            window.mapPadding = padding;
+
+            // Let deck.gl create its own canvas (required for proper event handling)
+            deckgl = new deck.DeckGL({
+                container: container,
+                initialViewState: {
+                    target: [width / 2, height / 2, 0],
+                    zoom: 0,
+                    minZoom: -2,
+                    maxZoom: 6,
+                },
+                controller: {
+                    dragPan: true,
+                    dragRotate: false,
+                    scrollZoom: true,
+                    touchZoom: true,
+                    touchRotate: false,
+                    keyboard: true,
+                    doubleClickZoom: true,
+                },
+                views: new deck.OrthographicView({
+                    flipY: true,
+                }),
+                layers: [],
+                onHover: handleHover,
+                onClick: handleClick,
+                pickingRadius: 5,
+                getTooltip: null,
+            });
+
+            updateLayers();
+        }
+
+        function getColorForSample(sample) {
+            const packIds = new Set(packSamples.map(s => s.id));
+            const suggestionIds = new Set(suggestions.map(s => s.id));
+
+            // In build mode, highlight pack and suggestions
+            if (mode === 'build') {
+                if (packIds.has(sample.id)) {
+                    return PACK_COLOR;
+                }
+                if (suggestionIds.has(sample.id)) {
+                    return SUGGESTION_COLOR;
+                }
+                // Dim other samples
+                return [80, 80, 90];
+            }
+
+            // Explore mode - normal coloring
+            if (colorMode === 'brightness') {
+                const brightness = Math.floor(sample.y * 255);
+                return [brightness, brightness * 0.8, 255 - brightness * 0.5];
+            } else if (colorMode === 'energy') {
+                const energy = sample.x;
+                return [
+                    Math.floor(100 + energy * 155),
+                    Math.floor(100 * (1 - energy)),
+                    Math.floor(100 + (1 - energy) * 100)
+                ];
+            } else {
+                const tags = sample.tags || [];
+                for (const tag of tags) {
+                    if (TAG_COLORS[tag]) {
+                        return TAG_COLORS[tag];
+                    }
+                }
+                return TAG_COLORS.default;
+            }
+        }
+
+        function updateLayers() {
+            const packIds = new Set(packSamples.map(s => s.id));
+            const suggestionIds = new Set(suggestions.map(s => s.id));
+
+            let filteredSamples = samples;
+
+            // In explore mode, apply tag filter
+            if (mode === 'explore' && activeTagFilter) {
+                filteredSamples = samples.filter(s => s.tags && s.tags.includes(activeTagFilter));
+            }
+
+            // Scale factor for positions (0-1 to pixel coordinates)
+            const scaleX = window.mapWidth || 800;
+            const scaleY = window.mapHeight || 600;
+            const padding = window.mapPadding || 50;
+
+            console.log('updateLayers: filteredSamples=', filteredSamples.length, 'scale=', scaleX, scaleY);
+
+            const scatterLayer = new deck.ScatterplotLayer({
+                id: 'samples',
+                data: filteredSamples,
+                getPosition: d => [padding + d.x * scaleX, padding + d.y * scaleY],
+                getRadius: d => {
+                    if (selectedSample && d.id === selectedSample.id) return 8;
+                    if (hoveredSample && d.id === hoveredSample.id) return 7;
+                    if (mode === 'build') {
+                        if (packIds.has(d.id)) return 7;
+                        if (suggestionIds.has(d.id)) return 6;
+                        return 3;
+                    }
+                    return 5;
+                },
+                getFillColor: d => {
+                    const color = getColorForSample(d);
+                    if (selectedSample && d.id === selectedSample.id) {
+                        return [...color, 255];
+                    }
+                    if (hoveredSample && d.id === hoveredSample.id) {
+                        return [...color, 230];
+                    }
+                    if (mode === 'build') {
+                        if (packIds.has(d.id)) return [...color, 255];
+                        if (suggestionIds.has(d.id)) return [...color, 220];
+                        return [...color, 100];
+                    }
+                    return [...color, 180];
+                },
+                getLineColor: d => {
+                    if (selectedSample && d.id === selectedSample.id) {
+                        return [255, 255, 255, 255];
+                    }
+                    if (mode === 'build' && packIds.has(d.id)) {
+                        return [255, 255, 255, 200];
+                    }
+                    return [0, 0, 0, 0];
+                },
+                getLineWidth: d => {
+                    if (selectedSample && d.id === selectedSample.id) return 2;
+                    if (mode === 'build' && packIds.has(d.id)) return 1;
+                    return 0;
+                },
+                stroked: true,
+                lineWidthUnits: 'pixels',
+                radiusUnits: 'pixels',
+                pickable: true,
+                updateTriggers: {
+                    getRadius: [selectedSample?.id, hoveredSample?.id, mode, packSamples.length, suggestions.length],
+                    getFillColor: [selectedSample?.id, hoveredSample?.id, colorMode, mode, packSamples.length, suggestions.length],
+                    getLineColor: [selectedSample?.id, mode, packSamples.length],
+                    getLineWidth: [selectedSample?.id, mode, packSamples.length],
+                },
+            });
+
+            console.log('Setting layer with', filteredSamples.length, 'points');
+            console.log('First point position:', filteredSamples[0] ? [padding + filteredSamples[0].x * scaleX, padding + filteredSamples[0].y * scaleY] : 'none');
+
+            deckgl.setProps({ layers: [scatterLayer] });
+
+            // Debug: check if deck.gl has the layer
+            setTimeout(() => {
+                console.log('deck.gl layers:', deckgl.props.layers.length);
+                console.log('deck.gl viewState:', deckgl.viewManager?.getViewState());
+            }, 100);
+        }
+
+        function handleHover(info) {
+            const tooltip = document.getElementById('tooltip');
+
+            if (info.object) {
+                hoveredSample = info.object;
+
+                tooltip.style.left = (info.x + 10) + 'px';
+                tooltip.style.top = (info.y + 10) + 'px';
+                tooltip.querySelector('.filename').textContent = info.object.filename;
+                tooltip.querySelector('.tags').textContent = (info.object.tags || []).slice(0, 5).join(', ');
+                tooltip.classList.add('visible');
+
+                // Don't update the info panel on hover - only show tooltip
+                // The info panel shows the selected sample
+            } else {
+                hoveredSample = null;
+                tooltip.classList.remove('visible');
+            }
+
+            updateLayers();
+        }
+
+        function handleClick(info) {
+            console.log('handleClick called, object:', info.object ? info.object.filename : 'none');
+            if (info.object) {
+                selectSample(info.object);
+            }
+        }
+
+        async function selectSample(sample) {
+            selectedSample = sample;
+            updateLayers();
+
+            try {
+                const response = await fetch(`/api/sample/${sample.id}`);
+                const data = await response.json();
+                updateSampleInfo(data);
+
+                const neighborsResponse = await fetch(`/api/neighbors/${sample.id}?limit=5`);
+                const neighborsData = await neighborsResponse.json();
+                updateNeighbors(neighborsData.neighbors);
+
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('now-playing').textContent = sample.filename;
+
+                if (audioElement) {
+                    audioElement.pause();
+                }
+                audioElement = new Audio(`/api/audio/${sample.id}`);
+                audioElement.addEventListener('ended', () => {
+                    isPlaying = false;
+                    updatePlayButton();
+                });
+
+                updateAddToPackButton();
+            } catch (error) {
+                console.error('Failed to load sample details:', error);
+            }
+        }
+
+        // Preview a sample without selecting it (quick play for suggestions/pack items)
+        function previewSample(sampleId) {
+            const sample = samples.find(s => s.id === sampleId);
+            if (!sample) return;
+
+            // Stop current audio
+            if (audioElement) {
+                audioElement.pause();
+            }
+
+            // Play the preview
+            audioElement = new Audio(`/api/audio/${sampleId}`);
+            document.getElementById('now-playing').textContent = `♪ ${sample.filename}`;
+            document.getElementById('play-btn').disabled = false;
+            isPlaying = true;
+            updatePlayButton();
+
+            audioElement.play();
+            audioElement.addEventListener('ended', () => {
+                isPlaying = false;
+                updatePlayButton();
+                // Restore selected sample name if there is one
+                if (selectedSample) {
+                    document.getElementById('now-playing').textContent = selectedSample.filename;
+                } else {
+                    document.getElementById('now-playing').textContent = 'No sample selected';
+                }
+            });
+        }
+
+        function updateHoverInfo(sample) {
+            const container = document.getElementById('hover-info');
+            container.style.display = 'block';
+
+            document.getElementById('hover-filename').textContent = sample.filename;
+            document.getElementById('hover-duration').textContent =
+                sample.duration_ms ? `${(sample.duration_ms / 1000).toFixed(2)}s` : '-';
+            document.getElementById('hover-bpm').textContent =
+                sample.bpm ? Math.round(sample.bpm) : '-';
+            document.getElementById('hover-key').textContent = sample.key || '-';
+            document.getElementById('hover-position').textContent =
+                `(${sample.x.toFixed(2)}, ${sample.y.toFixed(2)})`;
+
+            const tagsContainer = document.getElementById('hover-tags');
+            tagsContainer.innerHTML = (sample.tags || []).map(tag => {
+                const category = getTagCategory(tag);
+                return `<span class="sample-tag ${category}">${tag}</span>`;
+            }).join('');
+
+            updateAddToPackButton();
+        }
+
+        function updateSampleInfo(sample) {
+            updateHoverInfo({
+                filename: sample.filename,
+                duration_ms: sample.duration_ms,
+                bpm: sample.bpm,
+                key: sample.detected_key,
+                x: sample.map_x,
+                y: sample.map_y,
+                tags: sample.tags.map(t => t.name),
+            });
+        }
+
+        function updateNeighbors(neighbors) {
+            const section = document.getElementById('neighbors-section');
+            const list = document.getElementById('neighbors-list');
+
+            if (neighbors.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            list.innerHTML = neighbors.map(n => `
+                <div class="neighbor-item" data-id="${n.id}">
+                    <span class="neighbor-name">${n.filename}</span>
+                    <span class="neighbor-distance">${n.distance.toFixed(3)}</span>
+                </div>
+            `).join('');
+
+            list.querySelectorAll('.neighbor-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = parseInt(item.dataset.id);
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) selectSample(sample);
+                });
+            });
+        }
+
+        function getTagCategory(tag) {
+            const instruments = ['kick', 'snare', 'hihat', 'clap', 'bass', 'pad', 'synth', 'vocal', 'fx', 'loop', 'perc', '808', '909'];
+            const characters = ['punchy', 'soft', 'distorted', 'analog', 'digital', 'layered', 'wide'];
+            const moods = ['dark', 'bright', 'warm', 'aggressive', 'mellow', 'eerie', 'vintage'];
+            const genres = ['house', 'techno', 'ambient', 'hiphop', 'trap', 'dnb', 'industrial'];
+
+            if (instruments.includes(tag)) return 'instrument';
+            if (characters.includes(tag)) return 'character';
+            if (moods.includes(tag)) return 'mood';
+            if (genres.includes(tag)) return 'genre';
+            return '';
+        }
+
+        function renderTagFilters(tags) {
+            const container = document.getElementById('tag-filters');
+            const allTags = Object.values(tags).flat().slice(0, 12);
+
+            container.innerHTML = allTags.map(tag => `
+                <button class="tag-btn" data-tag="${tag}">${tag}</button>
+            `).join('');
+
+            container.querySelectorAll('.tag-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tag = btn.dataset.tag;
+                    if (activeTagFilter === tag) {
+                        activeTagFilter = null;
+                        btn.classList.remove('active');
+                    } else {
+                        container.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+                        activeTagFilter = tag;
+                        btn.classList.add('active');
+                    }
+                    updateLayers();
+                    updateStats(getFilteredCount());
+                });
+            });
+
+            updateColorLegend();
+        }
+
+        function updateColorLegend() {
+            const legend = document.getElementById('color-legend');
+
+            if (colorMode === 'tag') {
+                const displayTags = ['kick', 'snare', 'hihat', 'bass', 'pad', 'fx'];
+                legend.innerHTML = displayTags.map(tag => {
+                    const color = TAG_COLORS[tag] || TAG_COLORS.default;
+                    return `
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: rgb(${color.join(',')})"></div>
+                            <span>${tag}</span>
+                        </div>
+                    `;
+                }).join('');
+            } else if (colorMode === 'brightness') {
+                legend.innerHTML = `
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(0, 0, 200)"></div>
+                        <span>Dark</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(255, 200, 127)"></div>
+                        <span>Bright</span>
+                    </div>
+                `;
+            } else {
+                legend.innerHTML = `
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(100, 100, 200)"></div>
+                        <span>Soft</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(255, 0, 100)"></div>
+                        <span>Punchy</span>
+                    </div>
+                `;
+            }
+        }
+
+        function setupEventListeners() {
+            // Mode toggle
+            document.querySelectorAll('[data-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    mode = btn.dataset.mode;
+                    updateModeUI();
+                    updateLayers();
+                });
+            });
+
+            // Color mode buttons
+            document.querySelectorAll('[data-color]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('[data-color]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    colorMode = btn.dataset.color;
+                    updateLayers();
+                    updateColorLegend();
+                });
+            });
+
+            // Play button
+            document.getElementById('play-btn').addEventListener('click', togglePlay);
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && audioElement) {
+                    e.preventDefault();
+                    togglePlay();
+                }
+                // 'A' to add to pack
+                if (e.code === 'KeyA' && selectedSample && mode === 'build') {
+                    e.preventDefault();
+                    toggleSampleInPack(selectedSample);
+                }
+            });
+
+            // Pack builder buttons
+            document.getElementById('pack-clear').addEventListener('click', clearPack);
+            document.getElementById('pack-export').addEventListener('click', exportPack);
+            document.getElementById('add-to-pack-btn').addEventListener('click', () => {
+                if (selectedSample) {
+                    toggleSampleInPack(selectedSample);
+                }
+            });
+        }
+
+        function updateModeUI() {
+            const exploreFilters = document.getElementById('explore-filters');
+            const packBuilder = document.getElementById('pack-builder');
+
+            if (mode === 'explore') {
+                exploreFilters.style.display = 'block';
+                packBuilder.classList.remove('visible');
+            } else {
+                exploreFilters.style.display = 'none';
+                packBuilder.classList.add('visible');
+                refreshSuggestions();
+            }
+
+            updateAddToPackButton();
+        }
+
+        function updateAddToPackButton() {
+            const btn = document.getElementById('add-to-pack-btn');
+            const actions = document.getElementById('sample-actions');
+
+            if (mode === 'build') {
+                actions.style.display = 'flex';
+                if (selectedSample && packSamples.find(s => s.id === selectedSample.id)) {
+                    btn.textContent = 'Remove from Pack';
+                    btn.classList.add('in-pack');
+                } else {
+                    btn.textContent = 'Add to Pack';
+                    btn.classList.remove('in-pack');
+                }
+            } else {
+                actions.style.display = 'none';
+            }
+        }
+
+        // Pack builder functions
+        function toggleSampleInPack(sample) {
+            const idx = packSamples.findIndex(s => s.id === sample.id);
+            if (idx >= 0) {
+                packSamples.splice(idx, 1);
+            } else {
+                packSamples.push(sample);
+            }
+            updatePackUI();
+            refreshSuggestions();
+            updateAddToPackButton();
+            updateLayers();
+        }
+
+        function addSuggestionToPack(suggestionId) {
+            const suggestion = suggestions.find(s => s.id === suggestionId);
+            if (suggestion && !packSamples.find(s => s.id === suggestionId)) {
+                // Find full sample data
+                const sample = samples.find(s => s.id === suggestionId);
+                if (sample) {
+                    packSamples.push(sample);
+                    updatePackUI();
+                    refreshSuggestions();
+                    updateLayers();
+                }
+            }
+        }
+
+        function removeSampleFromPack(sampleId) {
+            packSamples = packSamples.filter(s => s.id !== sampleId);
+            updatePackUI();
+            refreshSuggestions();
+            updateAddToPackButton();
+            updateLayers();
+        }
+
+        function clearPack() {
+            packSamples = [];
+            suggestions = [];
+            packAnalysis = null;
+            updatePackUI();
+            updateLayers();
+        }
+
+        async function refreshSuggestions() {
+            if (packSamples.length === 0) {
+                suggestions = [];
+                packAnalysis = null;
+                updateSuggestionsUI();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/suggest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pack_ids: packSamples.map(s => s.id),
+                        limit: 8,
+                    }),
+                });
+                const data = await response.json();
+                suggestions = data.suggestions || [];
+                packAnalysis = data.analysis;
+                updateSuggestionsUI();
+                updateLayers();
+            } catch (error) {
+                console.error('Failed to get suggestions:', error);
+            }
+        }
+
+        function updatePackUI() {
+            // Update count
+            document.getElementById('pack-count').textContent = `${packSamples.length} samples`;
+
+            // Update category badges
+            const categories = {};
+            packSamples.forEach(s => {
+                const tags = s.tags || [];
+                for (const tag of tags) {
+                    if (['kick', 'snare', 'hihat', 'bass', 'synth', 'perc', 'fx', 'vocal'].includes(tag)) {
+                        categories[tag] = (categories[tag] || 0) + 1;
+                        break;
+                    }
+                }
+            });
+
+            const catContainer = document.getElementById('pack-categories');
+            catContainer.innerHTML = Object.entries(categories)
+                .map(([cat, count]) => `<span class="category-badge ${cat}">${cat}: ${count}</span>`)
+                .join('');
+
+            // Update pack items list
+            const itemsContainer = document.getElementById('pack-items');
+            itemsContainer.innerHTML = packSamples.map(s => `
+                <div class="pack-item" data-id="${s.id}">
+                    <button class="pack-item-play" data-id="${s.id}" title="Preview">▶</button>
+                    <span class="pack-item-name">${s.filename}</span>
+                    <span class="pack-item-remove" data-id="${s.id}">&times;</span>
+                </div>
+            `).join('');
+
+            // Click on pack item to select/navigate
+            itemsContainer.querySelectorAll('.pack-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('pack-item-remove') || e.target.classList.contains('pack-item-play')) return;
+                    const id = parseInt(item.dataset.id);
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) selectSample(sample);
+                });
+            });
+
+            // Play button on pack items
+            itemsContainer.querySelectorAll('.pack-item-play').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    previewSample(parseInt(btn.dataset.id));
+                });
+            });
+
+            itemsContainer.querySelectorAll('.pack-item-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeSampleFromPack(parseInt(btn.dataset.id));
+                });
+            });
+        }
+
+        function updateSuggestionsUI() {
+            const listContainer = document.getElementById('suggestions-list');
+            const nextCats = document.getElementById('next-categories');
+            const balanceContainer = document.getElementById('pack-balance');
+
+            if (!suggestions.length) {
+                listContainer.innerHTML = '<div style="font-size: 11px; color: #666; padding: 8px;">Add samples to get suggestions</div>';
+                nextCats.textContent = '';
+                balanceContainer.innerHTML = '';
+                return;
+            }
+
+            // Show next categories
+            if (packAnalysis && packAnalysis.next_categories) {
+                nextCats.textContent = `Looking for: ${packAnalysis.next_categories.join(', ')}`;
+            }
+
+            // Show suggestions (limit to 5 for compact display)
+            const displaySuggestions = suggestions.slice(0, 5);
+            listContainer.innerHTML = displaySuggestions.map(s => `
+                <div class="suggestion-item" data-id="${s.id}">
+                    <button class="suggestion-play" data-id="${s.id}" title="Preview">▶</button>
+                    <div class="suggestion-info">
+                        <div class="suggestion-name">${s.filename}</div>
+                        <div class="suggestion-reason">${s.reason}</div>
+                    </div>
+                    <button class="suggestion-add" data-id="${s.id}">+</button>
+                </div>
+            `).join('');
+
+            // Play button on suggestions
+            listContainer.querySelectorAll('.suggestion-play').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    previewSample(parseInt(btn.dataset.id));
+                });
+            });
+
+            // Click on suggestion to select/view details
+            listContainer.querySelectorAll('.suggestion-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('suggestion-add') || e.target.classList.contains('suggestion-play')) return;
+                    const id = parseInt(item.dataset.id);
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) selectSample(sample);
+                });
+            });
+
+            listContainer.querySelectorAll('.suggestion-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    addSuggestionToPack(parseInt(btn.dataset.id));
+                });
+            });
+
+            // Show balance warnings
+            if (packAnalysis && packAnalysis.suggestions && packAnalysis.suggestions.length > 0) {
+                balanceContainer.innerHTML = packAnalysis.suggestions
+                    .map(s => `<div class="balance-warning">${s}</div>`)
+                    .join('');
+            } else {
+                balanceContainer.innerHTML = '';
+            }
+        }
+
+        function exportPack() {
+            if (packSamples.length === 0) {
+                alert('Add samples to the pack first');
+                return;
+            }
+
+            // For now, just show the sample IDs
+            // In a full implementation, this would trigger the CLI export
+            const ids = packSamples.map(s => s.id).join(',');
+            alert(`Pack ready to export!\n\nRun this command:\nsoundpack export --ids ${ids} --name "MyPack"`);
+        }
+
+        function togglePlay() {
+            if (!audioElement) return;
+
+            if (isPlaying) {
+                audioElement.pause();
+                isPlaying = false;
+            } else {
+                audioElement.play();
+                isPlaying = true;
+            }
+            updatePlayButton();
+        }
+
+        function updatePlayButton() {
+            const btn = document.getElementById('play-btn');
+            btn.innerHTML = isPlaying
+                ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>'
+                : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        }
+
+        function updateStats(count) {
+            document.getElementById('stats').textContent = `${count} samples`;
+        }
+
+        function getFilteredCount() {
+            return activeTagFilter
+                ? samples.filter(s => s.tags && s.tags.includes(activeTagFilter)).length
+                : samples.length;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
