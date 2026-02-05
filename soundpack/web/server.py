@@ -1,10 +1,15 @@
 """FastAPI server for spectral map visualization."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,8 +49,13 @@ def get_db() -> Database:
 async def index():
     """Serve the main visualization page."""
     html_path = Path(__file__).parent / "static" / "index.html"
+    logger.info(f"Serving index.html from: {html_path}")
+    logger.info(f"File exists: {html_path.exists()}")
     if html_path.exists():
-        return HTMLResponse(content=html_path.read_text())
+        content = html_path.read_text()
+        logger.info(f"HTML content length: {len(content)} chars")
+        return HTMLResponse(content=content)
+    logger.error("Static files not found!")
     return HTMLResponse(content="<h1>Spectral Map</h1><p>Static files not found</p>")
 
 
@@ -62,8 +72,10 @@ async def get_map_data(
     Returns samples with their 2D positions and metadata.
     Supports filtering by bounding box and tags.
     """
+    logger.info("GET /api/map called")
     database = get_db()
     samples = database.get_samples_with_map_data()
+    logger.info(f"Found {len(samples)} samples with map data")
 
     # Filter by bounding box
     filtered = []
