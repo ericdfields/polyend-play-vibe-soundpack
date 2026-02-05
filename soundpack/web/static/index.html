@@ -210,11 +210,15 @@
         .category-badge.bass { background: #3a2a4a; color: #c8f; }
         .category-badge.synth { background: #2a4a3a; color: #8fc; }
         .category-badge.perc { background: #4a3a2a; color: #fc8; }
+        .category-badge.vocal { background: #4a2a4a; color: #f8c; }
+        .category-badge.fx { background: #3a3a3a; color: #aaa; }
 
         /* Suggestions Section */
         .suggestions-section {
-            padding: 12px 16px;
+            padding: 8px 16px;
             background: #0f1518;
+            max-height: 200px;
+            overflow-y: auto;
         }
 
         .suggestions-header {
@@ -238,13 +242,12 @@
         .suggestion-item {
             display: flex;
             align-items: center;
-            padding: 8px;
+            padding: 6px;
             background: #1a1a24;
             border-radius: 4px;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
             cursor: pointer;
             transition: background 0.15s;
-            border-left: 3px solid #4a6fa5;
         }
 
         .suggestion-item:hover {
@@ -264,7 +267,7 @@
         }
 
         .suggestion-reason {
-            font-size: 10px;
+            font-size: 9px;
             color: #6a9;
             white-space: nowrap;
             overflow: hidden;
@@ -272,14 +275,16 @@
         }
 
         .suggestion-add {
-            padding: 4px 8px;
-            font-size: 10px;
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
             background: #2a4a3a;
             border: none;
             color: #8fc;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
-            margin-left: 8px;
+            margin-left: 6px;
+            flex-shrink: 0;
         }
 
         .suggestion-add:hover {
@@ -569,6 +574,28 @@
             border-radius: 4px;
             margin-bottom: 3px;
             font-size: 11px;
+            cursor: pointer;
+        }
+
+        .pack-item:hover {
+            background: #2a2a34;
+        }
+
+        .pack-item-play {
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: #2a4a3a;
+            color: #8fc;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 9px;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        .pack-item-play:hover {
+            background: #3a5a4a;
         }
 
         .pack-item-name {
@@ -586,6 +613,23 @@
 
         .pack-item-remove:hover {
             color: #f88;
+        }
+
+        .suggestion-play {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: #2a3a4a;
+            color: #8cf;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .suggestion-play:hover {
+            background: #3a4a5a;
         }
     </style>
 </head>
@@ -944,7 +988,6 @@
         }
 
         function handleHover(info) {
-            console.log('handleHover called, object:', info.object ? info.object.filename : 'none', 'picked:', info.picked);
             const tooltip = document.getElementById('tooltip');
 
             if (info.object) {
@@ -956,7 +999,8 @@
                 tooltip.querySelector('.tags').textContent = (info.object.tags || []).slice(0, 5).join(', ');
                 tooltip.classList.add('visible');
 
-                updateHoverInfo(info.object);
+                // Don't update the info panel on hover - only show tooltip
+                // The info panel shows the selected sample
             } else {
                 hoveredSample = null;
                 tooltip.classList.remove('visible');
@@ -1001,6 +1045,36 @@
             } catch (error) {
                 console.error('Failed to load sample details:', error);
             }
+        }
+
+        // Preview a sample without selecting it (quick play for suggestions/pack items)
+        function previewSample(sampleId) {
+            const sample = samples.find(s => s.id === sampleId);
+            if (!sample) return;
+
+            // Stop current audio
+            if (audioElement) {
+                audioElement.pause();
+            }
+
+            // Play the preview
+            audioElement = new Audio(`/api/audio/${sampleId}`);
+            document.getElementById('now-playing').textContent = `♪ ${sample.filename}`;
+            document.getElementById('play-btn').disabled = false;
+            isPlaying = true;
+            updatePlayButton();
+
+            audioElement.play();
+            audioElement.addEventListener('ended', () => {
+                isPlaying = false;
+                updatePlayButton();
+                // Restore selected sample name if there is one
+                if (selectedSample) {
+                    document.getElementById('now-playing').textContent = selectedSample.filename;
+                } else {
+                    document.getElementById('now-playing').textContent = 'No sample selected';
+                }
+            });
         }
 
         function updateHoverInfo(sample) {
@@ -1320,11 +1394,30 @@
             // Update pack items list
             const itemsContainer = document.getElementById('pack-items');
             itemsContainer.innerHTML = packSamples.map(s => `
-                <div class="pack-item">
+                <div class="pack-item" data-id="${s.id}">
+                    <button class="pack-item-play" data-id="${s.id}" title="Preview">▶</button>
                     <span class="pack-item-name">${s.filename}</span>
                     <span class="pack-item-remove" data-id="${s.id}">&times;</span>
                 </div>
             `).join('');
+
+            // Click on pack item to select/navigate
+            itemsContainer.querySelectorAll('.pack-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('pack-item-remove') || e.target.classList.contains('pack-item-play')) return;
+                    const id = parseInt(item.dataset.id);
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) selectSample(sample);
+                });
+            });
+
+            // Play button on pack items
+            itemsContainer.querySelectorAll('.pack-item-play').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    previewSample(parseInt(btn.dataset.id));
+                });
+            });
 
             itemsContainer.querySelectorAll('.pack-item-remove').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -1351,20 +1444,31 @@
                 nextCats.textContent = `Looking for: ${packAnalysis.next_categories.join(', ')}`;
             }
 
-            // Show suggestions
-            listContainer.innerHTML = suggestions.map(s => `
+            // Show suggestions (limit to 5 for compact display)
+            const displaySuggestions = suggestions.slice(0, 5);
+            listContainer.innerHTML = displaySuggestions.map(s => `
                 <div class="suggestion-item" data-id="${s.id}">
+                    <button class="suggestion-play" data-id="${s.id}" title="Preview">▶</button>
                     <div class="suggestion-info">
                         <div class="suggestion-name">${s.filename}</div>
                         <div class="suggestion-reason">${s.reason}</div>
                     </div>
-                    <button class="suggestion-add" data-id="${s.id}">+ Add</button>
+                    <button class="suggestion-add" data-id="${s.id}">+</button>
                 </div>
             `).join('');
 
-            // Add click handlers
+            // Play button on suggestions
+            listContainer.querySelectorAll('.suggestion-play').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    previewSample(parseInt(btn.dataset.id));
+                });
+            });
+
+            // Click on suggestion to select/view details
             listContainer.querySelectorAll('.suggestion-item').forEach(item => {
-                item.addEventListener('click', () => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('suggestion-add') || e.target.classList.contains('suggestion-play')) return;
                     const id = parseInt(item.dataset.id);
                     const sample = samples.find(s => s.id === id);
                     if (sample) selectSample(sample);
