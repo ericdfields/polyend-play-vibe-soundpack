@@ -792,3 +792,180 @@ def analyze_pack_balance(
         "next_categories": get_next_categories(pack_samples),
         "suggestions": suggestions,
     }
+
+
+# Default target sizes for each category in a balanced pack
+AUTOFILL_TARGETS = {
+    "kick": 4,
+    "snare": 4,
+    "hihat": 4,
+    "perc": 3,
+    "bass": 3,
+    "synth": 2,
+    "fx": 2,
+    "vocal": 1,
+}
+
+
+def smart_autofill(
+    pack_samples: list[dict[str, Any]],
+    all_samples: list[dict[str, Any]],
+    target_size: int = 32,
+    preserve_vibe: bool = True,
+) -> list[dict[str, Any]]:
+    """Automatically fill out a pack to create a balanced, export-ready collection.
+
+    Takes the current pack selection and intelligently adds complementary samples
+    to create a well-rounded pack with good category distribution.
+
+    Args:
+        pack_samples: Samples already in the pack.
+        all_samples: All available samples to choose from.
+        target_size: Target total pack size (default 32).
+        preserve_vibe: If True, strongly prefer samples matching pack's vibe.
+
+    Returns:
+        List of samples to ADD to the pack (not including existing samples).
+    """
+    if not pack_samples:
+        # No starting point - return empty
+        return []
+
+    # Calculate how many more samples we need
+    samples_to_add = target_size - len(pack_samples)
+    if samples_to_add <= 0:
+        return []
+
+    pack_ids = {s["id"] for s in pack_samples}
+
+    # Analyze current pack composition
+    current_categories: dict[str, int] = {}
+    for sample in pack_samples:
+        cat = get_sample_category(sample.get("tags", [])) or "other"
+        current_categories[cat] = current_categories.get(cat, 0) + 1
+
+    # Get pack characteristics for matching
+    pack_tags = get_common_tags(pack_samples, min_frequency=0.2)
+    pack_centroid = get_pack_centroid(pack_samples)
+    pack_bpm = get_pack_bpm_range(pack_samples)
+
+    # Calculate target count for each category based on target_size
+    scale_factor = target_size / 32.0  # Base targets are for 32 samples
+    category_targets = {
+        cat: max(1, int(count * scale_factor))
+        for cat, count in AUTOFILL_TARGETS.items()
+    }
+
+    # Calculate how many we need for each category
+    category_needs: dict[str, int] = {}
+    for cat, target in category_targets.items():
+        current = current_categories.get(cat, 0)
+        if current < target:
+            category_needs[cat] = target - current
+
+    # Priority order for filling categories
+    priority_order = ["kick", "snare", "hihat", "perc", "bass", "synth", "fx", "vocal"]
+
+    # Filter out samples already in pack and without map data
+    available = [
+        s for s in all_samples
+        if s["id"] not in pack_ids and s.get("map_x") is not None
+    ]
+
+    # Score all available samples for vibe matching
+    def score_sample(sample: dict[str, Any]) -> float:
+        """Score how well a sample matches the pack's vibe."""
+        score = 0.0
+        sample_tags = sample.get("tags", [])
+
+        # Tag overlap (vibe matching)
+        if preserve_vibe and pack_tags:
+            shared = set(sample_tags) & set(pack_tags)
+            # Weight non-instrument tags higher
+            vibe_tags = [
+                t for t in shared
+                if t not in sum(INSTRUMENT_CATEGORIES.values(), [])
+            ]
+            score += len(vibe_tags) * 15 + len(shared) * 3
+
+        # Spectral proximity to pack centroid
+        if pack_centroid:
+            distance = np.sqrt(
+                (sample["map_x"] - pack_centroid[0]) ** 2 +
+                (sample["map_y"] - pack_centroid[1]) ** 2
+            )
+            # Prefer samples within reasonable distance but not identical
+            if 0.1 <= distance <= 0.4:
+                score += 20
+            elif distance <= 0.6:
+                score += 10
+
+        # BPM compatibility
+        if pack_bpm and sample.get("bpm"):
+            bpm_diff = min(
+                abs(sample["bpm"] - pack_bpm[0]),
+                abs(sample["bpm"] - pack_bpm[1])
+            )
+            if bpm_diff <= 3:
+                score += 15
+            elif bpm_diff <= 8:
+                score += 8
+
+        return score
+
+    # Pre-score all available samples
+    for sample in available:
+        sample["_vibe_score"] = score_sample(sample)
+
+    # Collect samples to add
+    samples_to_return: list[dict[str, Any]] = []
+    added_ids: set[int] = set()
+
+    # Fill each category in priority order
+    for category in priority_order:
+        needed = category_needs.get(category, 0)
+        if needed <= 0:
+            continue
+
+        # Find samples in this category
+        candidates = [
+            s for s in available
+            if get_sample_category(s.get("tags", [])) == category
+            and s["id"] not in added_ids
+        ]
+
+        # Sort by vibe score
+        candidates.sort(key=lambda x: x.get("_vibe_score", 0), reverse=True)
+
+        # Take top candidates
+        for sample in candidates[:needed]:
+            result = {k: v for k, v in sample.items() if not k.startswith("_")}
+            result["autofill_reason"] = f"fills {category} ({len(samples_to_return) + 1}/{samples_to_add})"
+            samples_to_return.append(result)
+            added_ids.add(sample["id"])
+
+            if len(samples_to_return) >= samples_to_add:
+                break
+
+        if len(samples_to_return) >= samples_to_add:
+            break
+
+    # If we still need more samples, fill with best vibe matches regardless of category
+    if len(samples_to_return) < samples_to_add:
+        remaining = [
+            s for s in available
+            if s["id"] not in added_ids
+        ]
+        remaining.sort(key=lambda x: x.get("_vibe_score", 0), reverse=True)
+
+        for sample in remaining:
+            if len(samples_to_return) >= samples_to_add:
+                break
+
+            result = {k: v for k, v in sample.items() if not k.startswith("_")}
+            cat = get_sample_category(sample.get("tags", [])) or "other"
+            result["autofill_reason"] = f"vibe match ({cat})"
+            samples_to_return.append(result)
+            added_ids.add(sample["id"])
+
+    return samples_to_return

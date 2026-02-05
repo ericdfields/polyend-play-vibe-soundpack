@@ -683,6 +683,7 @@
                         <span class="pack-count" id="pack-count">0 samples</span>
                     </div>
                     <div class="pack-actions">
+                        <button class="pack-action-btn" id="pack-autofill" title="Smart fill to 32 samples">Autofill</button>
                         <button class="pack-action-btn danger" id="pack-clear">Clear</button>
                         <button class="pack-action-btn primary" id="pack-export">Export</button>
                     </div>
@@ -1256,6 +1257,7 @@
             });
 
             // Pack builder buttons
+            document.getElementById('pack-autofill').addEventListener('click', autofillPack);
             document.getElementById('pack-clear').addEventListener('click', clearPack);
             document.getElementById('pack-export').addEventListener('click', exportPack);
             document.getElementById('add-to-pack-btn').addEventListener('click', () => {
@@ -1333,6 +1335,67 @@
             refreshSuggestions();
             updateAddToPackButton();
             updateLayers();
+        }
+
+        async function autofillPack() {
+            if (packSamples.length === 0) {
+                alert('Add some samples first to establish the vibe for autofill');
+                return;
+            }
+
+            const autofillBtn = document.getElementById('pack-autofill');
+            autofillBtn.disabled = true;
+            autofillBtn.textContent = 'Filling...';
+
+            try {
+                const response = await fetch('/api/pack/autofill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pack_ids: packSamples.map(s => s.id),
+                        target_size: 32,
+                    }),
+                });
+                const data = await response.json();
+
+                if (data.samples_to_add && data.samples_to_add.length > 0) {
+                    // Add all autofilled samples to the pack
+                    for (const sample of data.samples_to_add) {
+                        // Find the full sample data
+                        const fullSample = samples.find(s => s.id === sample.id);
+                        if (fullSample && !packSamples.find(p => p.id === fullSample.id)) {
+                            packSamples.push(fullSample);
+                        }
+                    }
+
+                    updatePackUI();
+                    updateLayers();
+                    refreshSuggestions();
+
+                    // Show summary
+                    const categories = {};
+                    data.samples_to_add.forEach(s => {
+                        const reason = s.reason || '';
+                        const match = reason.match(/fills (\w+)/);
+                        if (match) {
+                            categories[match[1]] = (categories[match[1]] || 0) + 1;
+                        }
+                    });
+                    const summary = Object.entries(categories)
+                        .map(([cat, count]) => `${count} ${cat}`)
+                        .join(', ');
+
+                    console.log(`Autofill added ${data.count} samples: ${summary}`);
+                } else {
+                    alert('Pack is already at target size or no matching samples found');
+                }
+            } catch (error) {
+                console.error('Autofill failed:', error);
+                alert('Autofill failed. Check console for details.');
+            } finally {
+                autofillBtn.disabled = false;
+                autofillBtn.textContent = 'Autofill';
+            }
         }
 
         function clearPack() {

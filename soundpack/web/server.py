@@ -360,6 +360,79 @@ async def analyze_pack(pack_ids: list[int]) -> dict[str, Any]:
     return analysis
 
 
+@app.post("/api/pack/autofill")
+async def autofill_pack(
+    pack_ids: list[int],
+    target_size: int = 32,
+) -> dict[str, Any]:
+    """Smart autofill to complete a pack with balanced, complementary samples.
+
+    Args:
+        pack_ids: List of sample IDs currently in the pack.
+        target_size: Target total pack size (default 32).
+
+    Returns:
+        Dict with samples to add and updated analysis.
+    """
+    from soundpack.map import smart_autofill, analyze_pack_balance
+
+    database = get_db()
+
+    # Load pack samples with their tags
+    pack_samples = []
+    for sample_id in pack_ids:
+        sample = database.get_sample(sample_id)
+        if sample:
+            tags = database.get_sample_tags(sample_id)
+            sample_dict = dict(sample)
+            sample_dict["tags"] = [t["name"] for t in tags]
+            pack_samples.append(sample_dict)
+
+    if not pack_samples:
+        return {
+            "samples_to_add": [],
+            "message": "Add some samples first to establish the vibe",
+        }
+
+    # Load all samples with tags for autofill
+    all_samples = database.get_samples_with_map_data()
+    for sample in all_samples:
+        tags = database.get_sample_tags(sample["id"])
+        sample["tags"] = [t["name"] for t in tags]
+
+    # Get autofill suggestions
+    samples_to_add = smart_autofill(
+        pack_samples,
+        all_samples,
+        target_size=target_size,
+        preserve_vibe=True,
+    )
+
+    # Format response
+    formatted_samples = []
+    for s in samples_to_add:
+        formatted_samples.append({
+            "id": s["id"],
+            "filename": s["filename"],
+            "x": s.get("map_x"),
+            "y": s.get("map_y"),
+            "tags": s.get("tags", []),
+            "bpm": s.get("bpm"),
+            "reason": s.get("autofill_reason", ""),
+        })
+
+    # Analyze what the pack would look like after autofill
+    combined_samples = pack_samples + samples_to_add
+    post_analysis = analyze_pack_balance(combined_samples)
+
+    return {
+        "samples_to_add": formatted_samples,
+        "count": len(formatted_samples),
+        "new_total": len(pack_samples) + len(formatted_samples),
+        "post_analysis": post_analysis,
+    }
+
+
 def create_app(db_path: Path | None = None, config_path: Path | None = None) -> FastAPI:
     """Create and configure the FastAPI app.
 
