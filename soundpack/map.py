@@ -426,16 +426,17 @@ def export_map_data(
 # === Pack Builder Suggestions ===
 
 # Instrument categories for pack building
+# These are used for both exact matching and substring matching
 INSTRUMENT_CATEGORIES = {
-    "kick": ["kick", "808", "909"],
-    "snare": ["snare", "clap", "rim"],
-    "hihat": ["hihat", "hat", "cymbal", "ride"],
-    "perc": ["perc", "shaker", "tambourine", "conga", "bongo", "tom"],
-    "bass": ["bass", "sub", "808"],
-    "synth": ["synth", "pad", "lead", "keys", "piano", "organ"],
-    "fx": ["fx", "riser", "impact", "sweep", "noise", "texture"],
-    "vocal": ["vocal", "vox", "voice", "choir"],
-    "loop": ["loop", "break", "beat"],
+    "kick": ["kick", "bd", "bassdrum"],
+    "snare": ["snare", "clap", "rim", "sd"],
+    "hihat": ["hihat", "hi-hat", "hh", "hat", "cymbal", "ride", "crash", "closed", "open"],
+    "perc": ["perc", "shaker", "tambourine", "conga", "bongo", "tom", "clave", "cowbell", "woodblock"],
+    "bass": ["bass", "sub", "808", "reese"],
+    "synth": ["synth", "pad", "lead", "keys", "piano", "organ", "pluck", "stab", "chord"],
+    "fx": ["fx", "sfx", "riser", "impact", "sweep", "noise", "texture", "foley", "atmos"],
+    "vocal": ["vocal", "vox", "voice", "choir", "spoken", "acapella"],
+    "loop": ["loop", "break", "beat", "groove", "toploop"],
 }
 
 # Which categories to suggest after each category (the pack building flow)
@@ -455,6 +456,9 @@ CATEGORY_FLOW = {
 def get_sample_category(tags: list[str]) -> str | None:
     """Determine the primary instrument category for a sample based on its tags.
 
+    Uses both exact matching and substring matching to catch variations
+    like "hi-hat_closed", "808_kick", etc.
+
     Args:
         tags: List of tag names.
 
@@ -463,10 +467,19 @@ def get_sample_category(tags: list[str]) -> str | None:
     """
     tags_lower = [t.lower() for t in tags]
 
+    # First pass: exact matches (higher priority)
     for category, category_tags in INSTRUMENT_CATEGORIES.items():
-        for tag in category_tags:
-            if tag in tags_lower:
+        for cat_tag in category_tags:
+            if cat_tag in tags_lower:
                 return category
+
+    # Second pass: substring matches (for tags like "hi-hat_closed", "808kick")
+    for category, category_tags in INSTRUMENT_CATEGORIES.items():
+        for cat_tag in category_tags:
+            for sample_tag in tags_lower:
+                # Check if category tag is contained in sample tag
+                if cat_tag in sample_tag:
+                    return category
 
     return None
 

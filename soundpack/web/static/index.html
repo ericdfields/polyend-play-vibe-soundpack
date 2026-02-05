@@ -856,6 +856,45 @@
         const SUGGESTION_COLOR = [100, 220, 150];
         const PACK_COLOR = [80, 200, 255];
 
+        // Category detection - mirrors backend INSTRUMENT_CATEGORIES
+        const CATEGORY_TAGS = {
+            kick: ['kick', 'bd', 'bassdrum'],
+            snare: ['snare', 'clap', 'rim', 'sd'],
+            hihat: ['hihat', 'hi-hat', 'hh', 'hat', 'cymbal', 'ride', 'crash', 'closed', 'open'],
+            perc: ['perc', 'shaker', 'tambourine', 'conga', 'bongo', 'tom', 'clave', 'cowbell'],
+            bass: ['bass', 'sub', '808', 'reese'],
+            synth: ['synth', 'pad', 'lead', 'keys', 'piano', 'organ', 'pluck', 'stab', 'chord'],
+            fx: ['fx', 'sfx', 'riser', 'impact', 'sweep', 'noise', 'texture', 'foley', 'atmos'],
+            vocal: ['vocal', 'vox', 'voice', 'choir', 'spoken', 'acapella'],
+        };
+
+        function getSampleCategory(tags) {
+            if (!tags || tags.length === 0) return null;
+            const tagsLower = tags.map(t => t.toLowerCase());
+
+            // First pass: exact matches
+            for (const [category, catTags] of Object.entries(CATEGORY_TAGS)) {
+                for (const catTag of catTags) {
+                    if (tagsLower.includes(catTag)) {
+                        return category;
+                    }
+                }
+            }
+
+            // Second pass: substring matches
+            for (const [category, catTags] of Object.entries(CATEGORY_TAGS)) {
+                for (const catTag of catTags) {
+                    for (const sampleTag of tagsLower) {
+                        if (sampleTag.includes(catTag)) {
+                            return category;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         // Initialize
         async function init() {
             console.log('=== init() called ===');
@@ -1615,12 +1654,9 @@
             // Update category badges
             const categories = {};
             packSamples.forEach(s => {
-                const tags = s.tags || [];
-                for (const tag of tags) {
-                    if (['kick', 'snare', 'hihat', 'bass', 'synth', 'perc', 'fx', 'vocal'].includes(tag)) {
-                        categories[tag] = (categories[tag] || 0) + 1;
-                        break;
-                    }
+                const cat = getSampleCategory(s.tags || []);
+                if (cat) {
+                    categories[cat] = (categories[cat] || 0) + 1;
                 }
             });
 
