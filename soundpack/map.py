@@ -810,18 +810,21 @@ AUTOFILL_TARGETS = {
 def smart_autofill(
     pack_samples: list[dict[str, Any]],
     all_samples: list[dict[str, Any]],
-    target_size: int = 32,
+    target_count: int = 64,
+    max_size_mb: float = 30.0,
     preserve_vibe: bool = True,
 ) -> list[dict[str, Any]]:
     """Automatically fill out a pack to create a balanced, export-ready collection.
 
     Takes the current pack selection and intelligently adds complementary samples
-    to create a well-rounded pack with good category distribution.
+    to create a well-rounded pack with good category distribution. Uses a hybrid
+    approach: targets a sample count but stops early if hitting the size limit.
 
     Args:
         pack_samples: Samples already in the pack.
         all_samples: All available samples to choose from.
-        target_size: Target total pack size (default 32).
+        target_count: Target total sample count (default 64).
+        max_size_mb: Maximum pack size in MB (default 30, leaving buffer for 32MB limit).
         preserve_vibe: If True, strongly prefer samples matching pack's vibe.
 
     Returns:
@@ -831,9 +834,19 @@ def smart_autofill(
         # No starting point - return empty
         return []
 
-    # Calculate how many more samples we need
-    samples_to_add = target_size - len(pack_samples)
+    # Calculate current pack size in bytes
+    current_size_bytes = sum(
+        s.get("file_size_bytes", 0) or 0 for s in pack_samples
+    )
+    max_size_bytes = int(max_size_mb * 1024 * 1024)
+
+    # Calculate how many more samples we could add (by count)
+    samples_to_add = target_count - len(pack_samples)
     if samples_to_add <= 0:
+        return []
+
+    # Check if we're already at or near size limit
+    if current_size_bytes >= max_size_bytes:
         return []
 
     pack_ids = {s["id"] for s in pack_samples}
@@ -849,8 +862,8 @@ def smart_autofill(
     pack_centroid = get_pack_centroid(pack_samples)
     pack_bpm = get_pack_bpm_range(pack_samples)
 
-    # Calculate target count for each category based on target_size
-    scale_factor = target_size / 32.0  # Base targets are for 32 samples
+    # Calculate target count for each category based on target_count
+    scale_factor = target_count / 32.0  # Base targets are for 32 samples
     category_targets = {
         cat: max(1, int(count * scale_factor))
         for cat, count in AUTOFILL_TARGETS.items()
@@ -920,6 +933,7 @@ def smart_autofill(
     # Collect samples to add
     samples_to_return: list[dict[str, Any]] = []
     added_ids: set[int] = set()
+    running_size_bytes = current_size_bytes
 
     # Track how many we've added per category (including existing pack samples)
     category_counts: dict[str, int] = dict(current_categories)
@@ -929,6 +943,11 @@ def smart_autofill(
         cat: max(int(count * 1.5), count + 2)
         for cat, count in category_targets.items()
     }
+
+    def can_add_sample(sample: dict[str, Any]) -> bool:
+        """Check if adding this sample would exceed size limit."""
+        sample_size = sample.get("file_size_bytes", 0) or 0
+        return (running_size_bytes + sample_size) <= max_size_bytes
 
     # Fill each category in priority order
     for category in priority_order:
@@ -946,13 +965,22 @@ def smart_autofill(
         # Sort by vibe score
         candidates.sort(key=lambda x: x.get("_vibe_score", 0), reverse=True)
 
-        # Take top candidates
-        for sample in candidates[:needed]:
+        # Take top candidates (checking size limit)
+        added_in_category = 0
+        for sample in candidates:
+            if added_in_category >= needed:
+                break
+            if not can_add_sample(sample):
+                continue  # Skip this sample, try next one
+
+            sample_size = sample.get("file_size_bytes", 0) or 0
             result = {k: v for k, v in sample.items() if not k.startswith("_")}
             result["autofill_reason"] = f"fills {category} ({len(samples_to_return) + 1}/{samples_to_add})"
             samples_to_return.append(result)
             added_ids.add(sample["id"])
+            running_size_bytes += sample_size
             category_counts[category] = category_counts.get(category, 0) + 1
+            added_in_category += 1
 
             if len(samples_to_return) >= samples_to_add:
                 break
@@ -971,6 +999,8 @@ def smart_autofill(
         for sample in remaining:
             if len(samples_to_return) >= samples_to_add:
                 break
+            if not can_add_sample(sample):
+                continue  # Skip this sample, would exceed size limit
 
             # Check if this category is at its cap
             cat = get_sample_category(sample.get("tags", [])) or "other"
@@ -981,10 +1011,12 @@ def smart_autofill(
                 # Skip this sample, category is full
                 continue
 
+            sample_size = sample.get("file_size_bytes", 0) or 0
             result = {k: v for k, v in sample.items() if not k.startswith("_")}
             result["autofill_reason"] = f"vibe match ({cat})"
             samples_to_return.append(result)
             added_ids.add(sample["id"])
+            running_size_bytes += sample_size
             category_counts[cat] = current_count + 1
 
     return samples_to_return

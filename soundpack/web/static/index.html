@@ -681,6 +681,7 @@
                     <div>
                         <h3>Pack Builder</h3>
                         <span class="pack-count" id="pack-count">0 samples</span>
+                        <span class="pack-size" id="pack-size" style="margin-left: 8px; color: #6a9;">0 MB / 32 MB</span>
                     </div>
                     <div class="pack-actions">
                         <button class="pack-action-btn" id="pack-autofill" title="Smart fill to 32 samples">Autofill</button>
@@ -1353,7 +1354,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         pack_ids: packSamples.map(s => s.id),
-                        target_size: 32,
+                        target_count: 64,  // Target sample count
+                        max_size_mb: 30.0, // Leave buffer for 32MB limit
                     }),
                 });
                 const data = await response.json();
@@ -1372,7 +1374,7 @@
                     updateLayers();
                     refreshSuggestions();
 
-                    // Show summary
+                    // Show summary with size info
                     const categories = {};
                     data.samples_to_add.forEach(s => {
                         const reason = s.reason || '';
@@ -1385,9 +1387,11 @@
                         .map(([cat, count]) => `${count} ${cat}`)
                         .join(', ');
 
-                    console.log(`Autofill added ${data.count} samples: ${summary}`);
+                    console.log(`Autofill added ${data.count} samples (${data.add_size_mb || 0} MB): ${summary}`);
+                    console.log(`Pack now: ${data.new_total} samples, ${data.new_size_mb || 0} MB`);
                 } else {
-                    alert('Pack is already at target size or no matching samples found');
+                    const reason = data.message || 'Pack is at size limit or no matching samples found';
+                    alert(reason);
                 }
             } catch (error) {
                 console.error('Autofill failed:', error);
@@ -1436,6 +1440,20 @@
         function updatePackUI() {
             // Update count
             document.getElementById('pack-count').textContent = `${packSamples.length} samples`;
+
+            // Update size display
+            const totalBytes = packSamples.reduce((sum, s) => sum + (s.file_size_bytes || 0), 0);
+            const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+            const sizeEl = document.getElementById('pack-size');
+            sizeEl.textContent = `${totalMB} MB / 32 MB`;
+            // Color the size indicator based on how full the pack is
+            if (totalMB >= 30) {
+                sizeEl.style.color = '#f88';  // Red when near limit
+            } else if (totalMB >= 24) {
+                sizeEl.style.color = '#fa8';  // Orange when getting full
+            } else {
+                sizeEl.style.color = '#6a9';  // Green when plenty of room
+            }
 
             // Update category badges
             const categories = {};

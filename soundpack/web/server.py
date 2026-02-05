@@ -115,6 +115,7 @@ async def get_map_data(
                 "duration_ms": sample.get("duration_ms"),
                 "spectral_centroid": sample.get("spectral_centroid"),
                 "rms_energy": sample.get("rms_energy"),
+                "file_size_bytes": sample.get("file_size_bytes"),
             })
 
     return {
@@ -151,6 +152,7 @@ async def get_sample(sample_id: int) -> dict[str, Any]:
         "rms_energy": sample.get("rms_energy"),
         "map_x": sample.get("map_x"),
         "map_y": sample.get("map_y"),
+        "file_size_bytes": sample.get("file_size_bytes"),
         "tags": [{"name": t["name"], "category": t["category"]} for t in tags],
     }
 
@@ -363,7 +365,8 @@ async def analyze_pack(pack_ids: list[int]) -> dict[str, Any]:
 
 class AutofillRequest(BaseModel):
     pack_ids: list[int]
-    target_size: int = 32
+    target_count: int = 64
+    max_size_mb: float = 30.0
 
 
 @app.post("/api/pack/autofill")
@@ -371,19 +374,20 @@ async def autofill_pack(request: AutofillRequest) -> dict[str, Any]:
     """Smart autofill to complete a pack with balanced, complementary samples.
 
     Args:
-        request: AutofillRequest with pack_ids and target_size.
+        request: AutofillRequest with pack_ids, target_count, and max_size_mb.
 
     Returns:
-        Dict with samples to add and updated analysis.
+        Dict with samples to add and updated analysis including size info.
     """
     from soundpack.map import smart_autofill, analyze_pack_balance
 
     pack_ids = request.pack_ids
-    target_size = request.target_size
+    target_count = request.target_count
+    max_size_mb = request.max_size_mb
 
     database = get_db()
 
-    # Load pack samples with their tags
+    # Load pack samples with their tags and file sizes
     pack_samples = []
     for sample_id in pack_ids:
         sample = database.get_sample(sample_id)
@@ -397,7 +401,14 @@ async def autofill_pack(request: AutofillRequest) -> dict[str, Any]:
         return {
             "samples_to_add": [],
             "message": "Add some samples first to establish the vibe",
+            "current_size_mb": 0,
         }
+
+    # Calculate current pack size
+    current_size_bytes = sum(
+        s.get("file_size_bytes", 0) or 0 for s in pack_samples
+    )
+    current_size_mb = current_size_bytes / (1024 * 1024)
 
     # Load all samples with tags for autofill
     all_samples = database.get_samples_with_map_data()
@@ -409,9 +420,16 @@ async def autofill_pack(request: AutofillRequest) -> dict[str, Any]:
     samples_to_add = smart_autofill(
         pack_samples,
         all_samples,
-        target_size=target_size,
+        target_count=target_count,
+        max_size_mb=max_size_mb,
         preserve_vibe=True,
     )
+
+    # Calculate size of samples to add
+    add_size_bytes = sum(
+        s.get("file_size_bytes", 0) or 0 for s in samples_to_add
+    )
+    add_size_mb = add_size_bytes / (1024 * 1024)
 
     # Format response
     formatted_samples = []
@@ -424,6 +442,7 @@ async def autofill_pack(request: AutofillRequest) -> dict[str, Any]:
             "tags": s.get("tags", []),
             "bpm": s.get("bpm"),
             "reason": s.get("autofill_reason", ""),
+            "size_bytes": s.get("file_size_bytes", 0) or 0,
         })
 
     # Analyze what the pack would look like after autofill
@@ -434,6 +453,10 @@ async def autofill_pack(request: AutofillRequest) -> dict[str, Any]:
         "samples_to_add": formatted_samples,
         "count": len(formatted_samples),
         "new_total": len(pack_samples) + len(formatted_samples),
+        "current_size_mb": round(current_size_mb, 2),
+        "add_size_mb": round(add_size_mb, 2),
+        "new_size_mb": round(current_size_mb + add_size_mb, 2),
+        "max_size_mb": max_size_mb,
         "post_analysis": post_analysis,
     }
 
