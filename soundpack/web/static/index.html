@@ -937,10 +937,20 @@
                 },
             });
 
+            console.log('Setting layer with', filteredSamples.length, 'points');
+            console.log('First point position:', filteredSamples[0] ? [padding + filteredSamples[0].x * scaleX, padding + filteredSamples[0].y * scaleY] : 'none');
+
             deckgl.setProps({ layers: [scatterLayer] });
+
+            // Debug: check if deck.gl has the layer
+            setTimeout(() => {
+                console.log('deck.gl layers:', deckgl.props.layers.length);
+                console.log('deck.gl viewState:', deckgl.viewManager?.getViewState());
+            }, 100);
         }
 
         function handleHover(info) {
+            console.log('handleHover called, object:', info.object ? info.object.filename : 'none', 'picked:', info.picked);
             const tooltip = document.getElementById('tooltip');
 
             if (info.object) {
@@ -962,6 +972,7 @@
         }
 
         function handleClick(info) {
+            console.log('handleClick called, object:', info.object ? info.object.filename : 'none');
             if (info.object) {
                 selectSample(info.object);
             }
