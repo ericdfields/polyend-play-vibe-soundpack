@@ -44,6 +44,10 @@ audio = [
 map = [
     "umap-learn>=0.5",
 ]
+web = [
+    "fastapi>=0.109",
+    "uvicorn>=0.27",
+]
 
 [project.scripts]
 soundpack = "soundpack.cli:main"

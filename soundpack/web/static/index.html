@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spectral Map - Soundpack Manager</title>
+    <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+    <script src="https://unpkg.com/@luma.gl/core@latest/dist/dist.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            height: 100vh;
+        }
+
+        #map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #deck-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        #sidebar {
+            width: 320px;
+            background: #12121a;
+            border-left: 1px solid #2a2a3a;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .sidebar-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-header .stats {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .filters {
+            padding: 16px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        .filter-group {
+            margin-bottom: 12px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .tag-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .tag-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+            border: 1px solid #3a3a4a;
+            background: transparent;
+            color: #aaa;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tag-btn:hover {
+            border-color: #5a5a6a;
+            color: #fff;
+        }
+
+        .tag-btn.active {
+            background: #4a6fa5;
+            border-color: #4a6fa5;
+            color: #fff;
+        }
+
+        #sample-info {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .sample-card {
+            background: #1a1a24;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .sample-card h3 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .sample-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .sample-meta dt {
+            color: #666;
+        }
+
+        .sample-meta dd {
+            color: #bbb;
+        }
+
+        .sample-tags {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .sample-tag {
+            padding: 2px 6px;
+            font-size: 10px;
+            background: #2a2a3a;
+            border-radius: 4px;
+            color: #aaa;
+        }
+
+        .sample-tag.instrument { background: #2a4a3a; color: #8fc; }
+        .sample-tag.character { background: #4a2a3a; color: #f8c; }
+        .sample-tag.mood { background: #2a3a4a; color: #8cf; }
+        .sample-tag.genre { background: #4a3a2a; color: #fc8; }
+
+        #audio-player {
+            padding: 16px;
+            border-top: 1px solid #2a2a3a;
+            background: #0f0f14;
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: #4a6fa5;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .play-btn:hover {
+            background: #5a7fb5;
+        }
+
+        .play-btn:disabled {
+            background: #3a3a4a;
+            cursor: not-allowed;
+        }
+
+        .waveform {
+            flex: 1;
+            height: 40px;
+            background: #1a1a24;
+            border-radius: 4px;
+        }
+
+        .now-playing {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 200px;
+            z-index: 1000;
+            display: none;
+        }
+
+        #tooltip.visible {
+            display: block;
+        }
+
+        #tooltip .filename {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        #tooltip .tags {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .axis-label {
+            position: absolute;
+            font-size: 10px;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .axis-label.top { top: 20px; left: 50%; transform: translateX(-50%); }
+        .axis-label.bottom { bottom: 20px; left: 50%; transform: translateX(-50%); }
+        .axis-label.left { left: 20px; top: 50%; transform: rotate(-90deg) translateX(-50%); transform-origin: left; }
+        .axis-label.right { right: 20px; top: 50%; transform: rotate(90deg) translateX(50%); transform-origin: right; }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #2a2a3a;
+            border-top-color: #4a6fa5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .neighbors-section {
+            margin-top: 16px;
+        }
+
+        .neighbors-section h4 {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .neighbor-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .neighbor-item:hover {
+            background: #2a2a34;
+        }
+
+        .neighbor-name {
+            flex: 1;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .neighbor-distance {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .color-legend {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #888;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="map-container">
+            <canvas id="deck-canvas"></canvas>
+            <div class="axis-label top">Bright</div>
+            <div class="axis-label bottom">Dark</div>
+            <div class="axis-label left">Soft</div>
+            <div class="axis-label right">Punchy</div>
+            <div id="tooltip">
+                <div class="filename"></div>
+                <div class="tags"></div>
+            </div>
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <div>Loading samples...</div>
+            </div>
+        </div>
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <h1>Spectral Map</h1>
+                <div class="stats" id="stats">Loading...</div>
+            </div>
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Color by</label>
+                    <div class="tag-filters">
+                        <button class="tag-btn active" data-color="tag">Tag</button>
+                        <button class="tag-btn" data-color="brightness">Brightness</button>
+                        <button class="tag-btn" data-color="energy">Energy</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Filter by tag</label>
+                    <div class="tag-filters" id="tag-filters"></div>
+                </div>
+                <div class="color-legend" id="color-legend"></div>
+            </div>
+            <div id="sample-info">
+                <div class="sample-card" id="hover-info" style="display: none;">
+                    <h3 id="hover-filename">-</h3>
+                    <dl class="sample-meta">
+                        <dt>Duration</dt><dd id="hover-duration">-</dd>
+                        <dt>BPM</dt><dd id="hover-bpm">-</dd>
+                        <dt>Key</dt><dd id="hover-key">-</dd>
+                        <dt>Position</dt><dd id="hover-position">-</dd>
+                    </dl>
+                    <div class="sample-tags" id="hover-tags"></div>
+                </div>
+                <div class="neighbors-section" id="neighbors-section" style="display: none;">
+                    <h4>Similar Samples</h4>
+                    <div id="neighbors-list"></div>
+                </div>
+            </div>
+            <div id="audio-player">
+                <div class="player-controls">
+                    <button class="play-btn" id="play-btn" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                    </button>
+                    <div class="waveform" id="waveform"></div>
+                </div>
+                <div class="now-playing" id="now-playing">No sample selected</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let samples = [];
+        let selectedSample = null;
+        let hoveredSample = null;
+        let colorMode = 'tag';
+        let activeTagFilter = null;
+        let audioElement = null;
+        let isPlaying = false;
+        let deckgl = null;
+
+        // Tag colors
+        const TAG_COLORS = {
+            // Instruments
+            kick: [220, 80, 80],
+            snare: [80, 160, 220],
+            hihat: [220, 200, 80],
+            clap: [180, 100, 200],
+            bass: [100, 80, 180],
+            pad: [80, 180, 140],
+            synth: [140, 200, 100],
+            vocal: [220, 140, 180],
+            fx: [160, 160, 160],
+            loop: [200, 160, 100],
+            perc: [180, 140, 100],
+            '808': [200, 60, 100],
+            '909': [100, 60, 200],
+            // Default
+            default: [120, 120, 140]
+        };
+
+        // Initialize
+        async function init() {
+            await loadSamples();
+            await loadTags();
+            initDeckGL();
+            setupEventListeners();
+            hideLoading();
+        }
+
+        async function loadSamples() {
+            try {
+                const response = await fetch('/api/map');
+                const data = await response.json();
+                samples = data.samples;
+                updateStats(data.total);
+            } catch (error) {
+                console.error('Failed to load samples:', error);
+            }
+        }
+
+        async function loadTags() {
+            try {
+                const response = await fetch('/api/tags');
+                const data = await response.json();
+                renderTagFilters(data.tags);
+            } catch (error) {
+                console.error('Failed to load tags:', error);
+            }
+        }
+
+        function initDeckGL() {
+            const container = document.getElementById('map-container');
+            const canvas = document.getElementById('deck-canvas');
+
+            deckgl = new deck.DeckGL({
+                container: container,
+                canvas: canvas,
+                initialViewState: {
+                    target: [0.5, 0.5, 0],
+                    zoom: 0,
+                    minZoom: -1,
+                    maxZoom: 4,
+                },
+                controller: {
+                    dragPan: true,
+                    dragRotate: false,
+                    scrollZoom: true,
+                    touchZoom: true,
+                    touchRotate: false,
+                    keyboard: true,
+                    doubleClickZoom: true,
+                },
+                views: new deck.OrthographicView({
+                    flipY: false,
+                }),
+                layers: [],
+                onHover: handleHover,
+                onClick: handleClick,
+                getTooltip: null,
+            });
+
+            updateLayers();
+        }
+
+        function getColorForSample(sample) {
+            if (colorMode === 'brightness') {
+                // Y position = brightness
+                const brightness = Math.floor(sample.y * 255);
+                return [brightness, brightness * 0.8, 255 - brightness * 0.5];
+            } else if (colorMode === 'energy') {
+                // X position = energy
+                const energy = sample.x;
+                return [
+                    Math.floor(100 + energy * 155),
+                    Math.floor(100 * (1 - energy)),
+                    Math.floor(100 + (1 - energy) * 100)
+                ];
+            } else {
+                // Color by primary tag
+                const tags = sample.tags || [];
+                for (const tag of tags) {
+                    if (TAG_COLORS[tag]) {
+                        return TAG_COLORS[tag];
+                    }
+                }
+                return TAG_COLORS.default;
+            }
+        }
+
+        function updateLayers() {
+            const filteredSamples = activeTagFilter
+                ? samples.filter(s => s.tags && s.tags.includes(activeTagFilter))
+                : samples;
+
+            const scatterLayer = new deck.ScatterplotLayer({
+                id: 'samples',
+                data: filteredSamples,
+                getPosition: d => [d.x, d.y],
+                getRadius: d => {
+                    if (selectedSample && d.id === selectedSample.id) return 0.015;
+                    if (hoveredSample && d.id === hoveredSample.id) return 0.012;
+                    return 0.008;
+                },
+                getFillColor: d => {
+                    const color = getColorForSample(d);
+                    if (selectedSample && d.id === selectedSample.id) {
+                        return [...color, 255];
+                    }
+                    if (hoveredSample && d.id === hoveredSample.id) {
+                        return [...color, 230];
+                    }
+                    return [...color, 180];
+                },
+                getLineColor: d => {
+                    if (selectedSample && d.id === selectedSample.id) {
+                        return [255, 255, 255, 255];
+                    }
+                    return [0, 0, 0, 0];
+                },
+                getLineWidth: d => selectedSample && d.id === selectedSample.id ? 2 : 0,
+                stroked: true,
+                lineWidthUnits: 'pixels',
+                radiusUnits: 'common',
+                pickable: true,
+                updateTriggers: {
+                    getRadius: [selectedSample?.id, hoveredSample?.id],
+                    getFillColor: [selectedSample?.id, hoveredSample?.id, colorMode],
+                    getLineColor: [selectedSample?.id],
+                },
+            });
+
+            deckgl.setProps({ layers: [scatterLayer] });
+        }
+
+        function handleHover(info) {
+            const tooltip = document.getElementById('tooltip');
+
+            if (info.object) {
+                hoveredSample = info.object;
+
+                // Position tooltip
+                tooltip.style.left = (info.x + 10) + 'px';
+                tooltip.style.top = (info.y + 10) + 'px';
+                tooltip.querySelector('.filename').textContent = info.object.filename;
+                tooltip.querySelector('.tags').textContent = (info.object.tags || []).slice(0, 5).join(', ');
+                tooltip.classList.add('visible');
+
+                // Update hover info panel
+                updateHoverInfo(info.object);
+
+                // Preview audio on hover (optional - can be enabled)
+                // previewAudio(info.object);
+            } else {
+                hoveredSample = null;
+                tooltip.classList.remove('visible');
+            }
+
+            updateLayers();
+        }
+
+        function handleClick(info) {
+            if (info.object) {
+                selectSample(info.object);
+            }
+        }
+
+        async function selectSample(sample) {
+            selectedSample = sample;
+            updateLayers();
+
+            // Load full sample details
+            try {
+                const response = await fetch(`/api/sample/${sample.id}`);
+                const data = await response.json();
+                updateSampleInfo(data);
+
+                // Load neighbors
+                const neighborsResponse = await fetch(`/api/neighbors/${sample.id}?limit=5`);
+                const neighborsData = await neighborsResponse.json();
+                updateNeighbors(neighborsData.neighbors);
+
+                // Enable audio
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('now-playing').textContent = sample.filename;
+
+                // Preload audio
+                if (audioElement) {
+                    audioElement.pause();
+                }
+                audioElement = new Audio(`/api/audio/${sample.id}`);
+                audioElement.addEventListener('ended', () => {
+                    isPlaying = false;
+                    updatePlayButton();
+                });
+            } catch (error) {
+                console.error('Failed to load sample details:', error);
+            }
+        }
+
+        function updateHoverInfo(sample) {
+            const container = document.getElementById('hover-info');
+            container.style.display = 'block';
+
+            document.getElementById('hover-filename').textContent = sample.filename;
+            document.getElementById('hover-duration').textContent =
+                sample.duration_ms ? `${(sample.duration_ms / 1000).toFixed(2)}s` : '-';
+            document.getElementById('hover-bpm').textContent =
+                sample.bpm ? Math.round(sample.bpm) : '-';
+            document.getElementById('hover-key').textContent = sample.key || '-';
+            document.getElementById('hover-position').textContent =
+                `(${sample.x.toFixed(2)}, ${sample.y.toFixed(2)})`;
+
+            const tagsContainer = document.getElementById('hover-tags');
+            tagsContainer.innerHTML = (sample.tags || []).map(tag => {
+                const category = getTagCategory(tag);
+                return `<span class="sample-tag ${category}">${tag}</span>`;
+            }).join('');
+        }
+
+        function updateSampleInfo(sample) {
+            // Same as hover info but with full details
+            updateHoverInfo({
+                filename: sample.filename,
+                duration_ms: sample.duration_ms,
+                bpm: sample.bpm,
+                key: sample.detected_key,
+                x: sample.map_x,
+                y: sample.map_y,
+                tags: sample.tags.map(t => t.name),
+            });
+        }
+
+        function updateNeighbors(neighbors) {
+            const section = document.getElementById('neighbors-section');
+            const list = document.getElementById('neighbors-list');
+
+            if (neighbors.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            list.innerHTML = neighbors.map(n => `
+                <div class="neighbor-item" data-id="${n.id}">
+                    <span class="neighbor-name">${n.filename}</span>
+                    <span class="neighbor-distance">${n.distance.toFixed(3)}</span>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            list.querySelectorAll('.neighbor-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = parseInt(item.dataset.id);
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) selectSample(sample);
+                });
+            });
+        }
+
+        function getTagCategory(tag) {
+            // Simple heuristic - could be improved with actual category data
+            const instruments = ['kick', 'snare', 'hihat', 'clap', 'bass', 'pad', 'synth', 'vocal', 'fx', 'loop', 'perc', '808', '909'];
+            const characters = ['punchy', 'soft', 'distorted', 'analog', 'digital', 'layered', 'wide'];
+            const moods = ['dark', 'bright', 'warm', 'aggressive', 'mellow', 'eerie', 'vintage'];
+            const genres = ['house', 'techno', 'ambient', 'hiphop', 'trap', 'dnb', 'industrial'];
+
+            if (instruments.includes(tag)) return 'instrument';
+            if (characters.includes(tag)) return 'character';
+            if (moods.includes(tag)) return 'mood';
+            if (genres.includes(tag)) return 'genre';
+            return '';
+        }
+
+        function renderTagFilters(tags) {
+            const container = document.getElementById('tag-filters');
+            const allTags = Object.values(tags).flat().slice(0, 12); // Limit to 12 tags
+
+            container.innerHTML = allTags.map(tag => `
+                <button class="tag-btn" data-tag="${tag}">${tag}</button>
+            `).join('');
+
+            container.querySelectorAll('.tag-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tag = btn.dataset.tag;
+                    if (activeTagFilter === tag) {
+                        activeTagFilter = null;
+                        btn.classList.remove('active');
+                    } else {
+                        container.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+                        activeTagFilter = tag;
+                        btn.classList.add('active');
+                    }
+                    updateLayers();
+                    updateStats(getFilteredCount());
+                });
+            });
+
+            updateColorLegend();
+        }
+
+        function updateColorLegend() {
+            const legend = document.getElementById('color-legend');
+
+            if (colorMode === 'tag') {
+                const displayTags = ['kick', 'snare', 'hihat', 'bass', 'pad', 'fx'];
+                legend.innerHTML = displayTags.map(tag => {
+                    const color = TAG_COLORS[tag] || TAG_COLORS.default;
+                    return `
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: rgb(${color.join(',')})"></div>
+                            <span>${tag}</span>
+                        </div>
+                    `;
+                }).join('');
+            } else if (colorMode === 'brightness') {
+                legend.innerHTML = `
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(0, 0, 200)"></div>
+                        <span>Dark</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(255, 200, 127)"></div>
+                        <span>Bright</span>
+                    </div>
+                `;
+            } else {
+                legend.innerHTML = `
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(100, 100, 200)"></div>
+                        <span>Soft</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: rgb(255, 0, 100)"></div>
+                        <span>Punchy</span>
+                    </div>
+                `;
+            }
+        }
+
+        function setupEventListeners() {
+            // Color mode buttons
+            document.querySelectorAll('[data-color]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('[data-color]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    colorMode = btn.dataset.color;
+                    updateLayers();
+                    updateColorLegend();
+                });
+            });
+
+            // Play button
+            document.getElementById('play-btn').addEventListener('click', togglePlay);
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && audioElement) {
+                    e.preventDefault();
+                    togglePlay();
+                }
+            });
+        }
+
+        function togglePlay() {
+            if (!audioElement) return;
+
+            if (isPlaying) {
+                audioElement.pause();
+                isPlaying = false;
+            } else {
+                audioElement.play();
+                isPlaying = true;
+            }
+            updatePlayButton();
+        }
+
+        function updatePlayButton() {
+            const btn = document.getElementById('play-btn');
+            btn.innerHTML = isPlaying
+                ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>'
+                : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        }
+
+        function updateStats(count) {
+            document.getElementById('stats').textContent = `${count} samples`;
+        }
+
+        function getFilteredCount() {
+            return activeTagFilter
+                ? samples.filter(s => s.tags && s.tags.includes(activeTagFilter)).length
+                : samples.length;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

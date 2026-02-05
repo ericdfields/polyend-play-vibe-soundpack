@@ -1170,6 +1170,39 @@ def map_neighbors(ctx, sample_id: int, limit: int):
     console.print(table)
 
 
+@map_group.command("view")
+@click.option("--port", "-p", default=8080, help="Port to run server on")
+@click.option("--host", "-h", default="127.0.0.1", help="Host to bind to")
+@click.option("--no-browser", is_flag=True, help="Don't open browser automatically")
+@pass_context
+def map_view(ctx, port: int, host: str, no_browser: bool):
+    """Launch interactive spectral map visualization in browser.
+
+    Opens a web interface for exploring your sample library visually.
+    Samples are displayed as points positioned by sonic similarity.
+    """
+    from soundpack.web import run_server
+
+    # Check if we have map data
+    map_stats = ctx.db.get_map_stats()
+    if map_stats["samples_with_positions"] == 0:
+        console.print("[yellow]No samples have map positions yet.[/yellow]")
+        console.print("Run [cyan]soundpack map compute[/cyan] first to generate the map.")
+        return
+
+    console.print(f"\n[bold]Starting Spectral Map UI[/bold]")
+    console.print(f"  Samples in map: {map_stats['samples_with_positions']}")
+    console.print(f"  Server: http://{host}:{port}")
+    console.print("\n[dim]Press Ctrl+C to stop the server[/dim]\n")
+
+    run_server(
+        host=host,
+        port=port,
+        db_path=ctx._db_path,
+        open_browser=not no_browser,
+    )
+
+
 def main():
     """Main entry point."""
     cli()
