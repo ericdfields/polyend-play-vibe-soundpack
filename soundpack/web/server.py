@@ -10,6 +10,7 @@ from typing import Any
 print("[SERVER.PY] Module loading...", file=sys.stderr, flush=True)
 
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -360,21 +361,25 @@ async def analyze_pack(pack_ids: list[int]) -> dict[str, Any]:
     return analysis
 
 
+class AutofillRequest(BaseModel):
+    pack_ids: list[int]
+    target_size: int = 32
+
+
 @app.post("/api/pack/autofill")
-async def autofill_pack(
-    pack_ids: list[int],
-    target_size: int = 32,
-) -> dict[str, Any]:
+async def autofill_pack(request: AutofillRequest) -> dict[str, Any]:
     """Smart autofill to complete a pack with balanced, complementary samples.
 
     Args:
-        pack_ids: List of sample IDs currently in the pack.
-        target_size: Target total pack size (default 32).
+        request: AutofillRequest with pack_ids and target_size.
 
     Returns:
         Dict with samples to add and updated analysis.
     """
     from soundpack.map import smart_autofill, analyze_pack_balance
+
+    pack_ids = request.pack_ids
+    target_size = request.target_size
 
     database = get_db()
 
