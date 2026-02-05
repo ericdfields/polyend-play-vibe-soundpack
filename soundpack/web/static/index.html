@@ -834,6 +834,43 @@
         let suggestions = [];  // Current suggestions
         let packAnalysis = null;
 
+        // Storage key for persisting pack
+        const PACK_STORAGE_KEY = 'soundpack_builder_pack';
+
+        // Save pack to localStorage
+        function savePack() {
+            const packIds = packSamples.map(s => s.id);
+            localStorage.setItem(PACK_STORAGE_KEY, JSON.stringify(packIds));
+        }
+
+        // Load pack from localStorage (called after samples are loaded)
+        function loadPackFromStorage() {
+            try {
+                const stored = localStorage.getItem(PACK_STORAGE_KEY);
+                if (!stored) return;
+
+                const packIds = JSON.parse(stored);
+                if (!Array.isArray(packIds) || packIds.length === 0) return;
+
+                // Restore pack samples from IDs
+                packSamples = [];
+                for (const id of packIds) {
+                    const sample = samples.find(s => s.id === id);
+                    if (sample) {
+                        packSamples.push(sample);
+                    }
+                }
+
+                if (packSamples.length > 0) {
+                    console.log(`Restored pack with ${packSamples.length} samples from storage`);
+                    updatePackUI();
+                    // Don't auto-switch to build mode, just have pack ready
+                }
+            } catch (error) {
+                console.error('Failed to restore pack from storage:', error);
+            }
+        }
+
         // Tag colors
         const TAG_COLORS = {
             kick: [220, 80, 80],
@@ -901,6 +938,7 @@
             await loadSamples();
             console.log('Samples loaded:', samples.length);
             await loadTags();
+            loadPackFromStorage();  // Restore pack from previous session
             initDeckGL();
             setupEventListeners();
             hideLoading();
@@ -1634,6 +1672,9 @@
         }
 
         function updatePackUI() {
+            // Persist pack to localStorage
+            savePack();
+
             // Update count
             document.getElementById('pack-count').textContent = `${packSamples.length} samples`;
 
