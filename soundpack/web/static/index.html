@@ -741,6 +741,16 @@
             initDeckGL();
             setupEventListeners();
             hideLoading();
+
+            // Force re-render after a short delay to ensure canvas is sized
+            setTimeout(() => {
+                const container = document.getElementById('map-container');
+                window.mapWidth = container.clientWidth - 100;
+                window.mapHeight = container.clientHeight - 100;
+                window.mapPadding = 50;
+                console.log('Map dimensions:', window.mapWidth, 'x', window.mapHeight, 'samples:', samples.length);
+                updateLayers();
+            }, 100);
         }
 
         async function loadSamples() {
@@ -861,6 +871,8 @@
             const scaleX = window.mapWidth || 800;
             const scaleY = window.mapHeight || 600;
             const padding = window.mapPadding || 50;
+
+            console.log('updateLayers: filteredSamples=', filteredSamples.length, 'scale=', scaleX, scaleY);
 
             const scatterLayer = new deck.ScatterplotLayer({
                 id: 'samples',
