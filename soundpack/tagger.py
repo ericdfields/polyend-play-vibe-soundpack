@@ -200,7 +200,13 @@ Sample information:
 
 Available tags by category:
 {vocab_str}
-Based on the filename and audio characteristics, suggest appropriate tags.
+Suggest appropriate tags based on the audio characteristics above.
+
+IMPORTANT: The filename is provided for context but may be arbitrary or misleading.
+- Only use filename words that EXACTLY match tags in the vocabulary (e.g., "kick", "snare", "808").
+- Do NOT infer content from ambiguous filename words. For example, a file named "Kid" or "Voice" does not necessarily contain vocals—only tag as "vocal" or "speech" if audio features strongly suggest it (which these basic features cannot reliably detect).
+- When uncertain, omit the tag rather than guess.
+
 Return ONLY a JSON object in this exact format:
 {{"instrument": [...], "character": [...], "mood": [...], "genre": [...]}}
 
