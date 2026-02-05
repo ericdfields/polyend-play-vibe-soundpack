@@ -696,6 +696,8 @@
     </div>
 
     <script>
+        console.log('=== Spectral Map JS Loading ===');
+
         // State
         let samples = [];
         let selectedSample = null;
@@ -736,7 +738,9 @@
 
         // Initialize
         async function init() {
+            console.log('=== init() called ===');
             await loadSamples();
+            console.log('Samples loaded:', samples.length);
             await loadTags();
             initDeckGL();
             setupEventListeners();
