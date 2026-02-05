@@ -921,6 +921,15 @@ def smart_autofill(
     samples_to_return: list[dict[str, Any]] = []
     added_ids: set[int] = set()
 
+    # Track how many we've added per category (including existing pack samples)
+    category_counts: dict[str, int] = dict(current_categories)
+
+    # Maximum samples per category (150% of target, minimum target + 2)
+    category_max: dict[str, int] = {
+        cat: max(int(count * 1.5), count + 2)
+        for cat, count in category_targets.items()
+    }
+
     # Fill each category in priority order
     for category in priority_order:
         needed = category_needs.get(category, 0)
@@ -943,6 +952,7 @@ def smart_autofill(
             result["autofill_reason"] = f"fills {category} ({len(samples_to_return) + 1}/{samples_to_add})"
             samples_to_return.append(result)
             added_ids.add(sample["id"])
+            category_counts[category] = category_counts.get(category, 0) + 1
 
             if len(samples_to_return) >= samples_to_add:
                 break
@@ -950,7 +960,7 @@ def smart_autofill(
         if len(samples_to_return) >= samples_to_add:
             break
 
-    # If we still need more samples, fill with best vibe matches regardless of category
+    # If we still need more samples, fill with best vibe matches BUT respect category caps
     if len(samples_to_return) < samples_to_add:
         remaining = [
             s for s in available
@@ -962,10 +972,19 @@ def smart_autofill(
             if len(samples_to_return) >= samples_to_add:
                 break
 
-            result = {k: v for k, v in sample.items() if not k.startswith("_")}
+            # Check if this category is at its cap
             cat = get_sample_category(sample.get("tags", [])) or "other"
+            current_count = category_counts.get(cat, 0)
+            max_count = category_max.get(cat, 6)  # default max of 6 for unknown categories
+
+            if current_count >= max_count:
+                # Skip this sample, category is full
+                continue
+
+            result = {k: v for k, v in sample.items() if not k.startswith("_")}
             result["autofill_reason"] = f"vibe match ({cat})"
             samples_to_return.append(result)
             added_ids.add(sample["id"])
+            category_counts[cat] = current_count + 1
 
     return samples_to_return
