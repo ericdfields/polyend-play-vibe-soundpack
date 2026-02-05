@@ -745,12 +745,13 @@
             // Force re-render after a short delay to ensure canvas is sized
             setTimeout(() => {
                 const container = document.getElementById('map-container');
-                window.mapWidth = container.clientWidth - 100;
-                window.mapHeight = container.clientHeight - 100;
+                const rect = container.getBoundingClientRect();
+                window.mapWidth = (rect.width || window.innerWidth - 340) - 100;
+                window.mapHeight = (rect.height || window.innerHeight) - 100;
                 window.mapPadding = 50;
-                console.log('Map dimensions:', window.mapWidth, 'x', window.mapHeight, 'samples:', samples.length);
+                console.log('Map dimensions (delayed):', window.mapWidth, 'x', window.mapHeight, 'samples:', samples.length);
                 updateLayers();
-            }, 100);
+            }, 200);
         }
 
         async function loadSamples() {
@@ -778,10 +779,18 @@
             const container = document.getElementById('map-container');
             const canvas = document.getElementById('deck-canvas');
 
-            // Scale positions to pixel space for better rendering
-            const width = container.clientWidth;
-            const height = container.clientHeight;
+            // Get dimensions from bounding rect (more reliable than clientWidth/Height)
+            const rect = container.getBoundingClientRect();
+            const width = rect.width || window.innerWidth - 340;  // fallback: window width minus sidebar
+            const height = rect.height || window.innerHeight;
             const padding = 50;
+
+            console.log('initDeckGL: container rect =', rect.width, 'x', rect.height);
+
+            // Store dimensions for position scaling
+            window.mapWidth = width - padding * 2;
+            window.mapHeight = height - padding * 2;
+            window.mapPadding = padding;
 
             deckgl = new deck.DeckGL({
                 container: container,
@@ -809,11 +818,6 @@
                 onClick: handleClick,
                 getTooltip: null,
             });
-
-            // Store dimensions for position scaling
-            window.mapWidth = width - padding * 2;
-            window.mapHeight = height - padding * 2;
-            window.mapPadding = padding;
 
             updateLayers();
         }
